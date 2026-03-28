@@ -1,0 +1,265 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>TiempoLuarca - Navegacion</title>
+    <link rel="stylesheet" href="/static/styles.css?v=2">
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/weather-icons/2.0.12/css/weather-icons.min.css">
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800;900&display=swap" rel="stylesheet">
+    <link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'><text y='.9em' font-size='90'>&#9973;</text></svg>">
+</head>
+<body>
+    <header>
+        <div class="header-content">
+            <div class="logo">
+                <div class="logo-icon">
+                    <svg viewBox="0 0 60 60" width="48" height="48">
+                        <!-- Ola -->
+                        <path d="M4 38c4-6 8-9 12-9s8 3 12 9 8 9 12 9 8-3 12-9" fill="none" stroke="url(#waveGrad)" stroke-width="3" stroke-linecap="round"/>
+                        <path d="M4 45c4-5 8-8 12-8s8 3 12 8 8 8 12 8 8-3 12-8" fill="none" stroke="url(#waveGrad)" stroke-width="2.5" stroke-linecap="round" opacity="0.4"/>
+                        <!-- Barco -->
+                        <path d="M22 32 L30 18 L38 32 Z" fill="none" stroke="#fff" stroke-width="1.5" stroke-linejoin="round" opacity="0.9"/>
+                        <line x1="30" y1="18" x2="30" y2="12" stroke="#fff" stroke-width="1.5" opacity="0.9"/>
+                        <path d="M30 12 L30 18 L38 22" fill="url(#sailGrad)" opacity="0.6"/>
+                        <!-- Compass mark -->
+                        <circle cx="50" cy="12" r="7" fill="none" stroke="rgba(255,255,255,0.15)" stroke-width="1"/>
+                        <line x1="50" y1="6" x2="50" y2="8" stroke="rgba(255,255,255,0.3)" stroke-width="1.5"/>
+                        <text x="50" y="15" text-anchor="middle" fill="rgba(255,255,255,0.2)" font-size="5" font-weight="700">N</text>
+                        <defs>
+                            <linearGradient id="waveGrad" x1="0%" y1="0%" x2="100%" y2="0%">
+                                <stop offset="0%" stop-color="#3b82f6"/>
+                                <stop offset="100%" stop-color="#06b6d4"/>
+                            </linearGradient>
+                            <linearGradient id="sailGrad" x1="0%" y1="0%" x2="100%" y2="100%">
+                                <stop offset="0%" stop-color="#3b82f6" stop-opacity="0.5"/>
+                                <stop offset="100%" stop-color="#06b6d4" stop-opacity="0.2"/>
+                            </linearGradient>
+                        </defs>
+                    </svg>
+                </div>
+                <div class="logo-text">
+                    <h1>Tiempo<span>Luarca</span></h1>
+                    <p class="subtitle">Beneteau Antares 6.5 &middot; 12 nm</p>
+                </div>
+            </div>
+            <span class="last-update" id="lastUpdate"></span>
+            <div class="unit-toggle">
+                <button class="unit-btn active" data-unit="kn" onclick="setUnit('kn')">Nudos</button>
+                <button class="unit-btn" data-unit="kmh" onclick="setUnit('kmh')">km/h</button>
+            </div>
+        </div>
+    </header>
+
+    <main>
+        <!-- Score principal -->
+        <section class="current-section" id="currentSection">
+            <div class="score-ring-container">
+                <div class="score-ring" id="scoreRing">
+                    <svg viewBox="0 0 120 120">
+                        <circle class="ring-bg" cx="60" cy="60" r="54" />
+                        <circle class="ring-fg" id="ringFg" cx="60" cy="60" r="54" />
+                    </svg>
+                    <div class="score-number" id="scoreNumber">--</div>
+                </div>
+                <div class="score-label" id="scoreLabel">Cargando...</div>
+                <div class="score-recommendation" id="scoreRecommendation"></div>
+            </div>
+
+            <!-- Datos actuales -->
+            <div class="current-grid" id="currentGrid">
+                <div class="data-card clickable" id="cardViento" onclick="toggleChart('viento')">
+                    <div class="card-icon"><i class="wi wi-strong-wind" style="font-size:2rem"></i></div>
+                    <div class="card-value" id="valViento">--</div>
+                    <div class="card-unit">kn</div>
+                    <div class="card-label">Viento</div>
+                    <div class="card-extra" id="valRacha"></div>
+                    <div class="card-score-bar"><div class="bar-fill" id="barViento"></div></div>
+                    <div class="card-expand-hint">ver grafica</div>
+                </div>
+                <div class="data-card clickable" id="cardOleaje" onclick="toggleChart('oleaje')">
+                    <div class="card-icon"><i class="wi wi-tsunami" style="font-size:2rem"></i></div>
+                    <div class="card-value" id="valOla">--</div>
+                    <div class="card-unit">metros</div>
+                    <div class="card-label">Oleaje</div>
+                    <div class="card-extra" id="valPeriodo"></div>
+                    <div class="card-score-bar"><div class="bar-fill" id="barOleaje"></div></div>
+                    <div class="card-expand-hint">ver grafica</div>
+                </div>
+                <div class="data-card clickable" id="cardLluvia" onclick="toggleChart('lluvia')">
+                    <div class="card-icon"><i class="wi wi-rain" style="font-size:2rem"></i></div>
+                    <div class="card-value" id="valLluvia">--</div>
+                    <div class="card-unit">%</div>
+                    <div class="card-label">Lluvia</div>
+                    <div class="card-extra" id="valPrecip"></div>
+                    <div class="card-score-bar"><div class="bar-fill" id="barLluvia"></div></div>
+                    <div class="card-expand-hint">ver grafica</div>
+                </div>
+                <div class="data-card clickable" id="cardTemp" onclick="toggleChart('temperatura')">
+                    <div class="card-icon"><i class="wi wi-thermometer" style="font-size:2rem"></i></div>
+                    <div class="card-value" id="valTemp">--</div>
+                    <div class="card-unit">&deg;C</div>
+                    <div class="card-label">Temperatura</div>
+                    <div class="card-extra" id="valPresion"></div>
+                    <div class="card-score-bar"><div class="bar-fill" id="barVisibilidad"></div></div>
+                    <div class="card-expand-hint">ver grafica</div>
+                </div>
+            </div>
+
+            <!-- Panel de grafica expandible -->
+            <div class="chart-panel" id="chartPanel">
+                <div class="chart-panel-header">
+                    <h3 id="chartPanelTitle"></h3>
+                    <button class="chart-panel-close" onclick="toggleChart(null)">&times;</button>
+                </div>
+                <canvas id="detailChart" width="800" height="250"></canvas>
+                <div class="chart-legend" id="chartLegend"></div>
+            </div>
+        </section>
+
+        <!-- Resumen: Hoy, Manana, Fin de semana -->
+        <section class="summary-section">
+            <h2>Resumen</h2>
+            <div class="summary-cards" id="summaryCards">
+                <!-- Se generan dinámicamente -->
+            </div>
+        </section>
+
+        <!-- Pronóstico horario -->
+        <section class="forecast-section">
+            <h2>Pronostico por horas</h2>
+            <div class="forecast-tabs" id="forecastTabs"></div>
+            <div class="forecast-chart" id="forecastChart"></div>
+            <div class="forecast-table-wrapper">
+                <table class="forecast-table" id="forecastTable">
+                    <thead>
+                        <tr>
+                            <th>Hora</th>
+                            <th>Score</th>
+                            <th>Viento</th>
+                            <th>Racha</th>
+                            <th>Fondo</th>
+                            <th>M.Viento</th>
+                            <th>Lluvia</th>
+                            <th>Temp</th>
+                        </tr>
+                    </thead>
+                    <tbody id="forecastBody"></tbody>
+                </table>
+            </div>
+        </section>
+
+        <!-- Mareas -->
+        <section class="tides-section">
+            <h2>Mareas</h2>
+            <div class="tides-tabs">
+                <button class="tide-tab active" data-station="navia" onclick="selectTideStation('navia')">Navia (15km O)</button>
+                <button class="tide-tab" data-station="aviles" onclick="selectTideStation('aviles')">Aviles (60km E)</button>
+            </div>
+            <div class="tide-chart-container">
+                <canvas id="tideCanvas" width="800" height="220"></canvas>
+            </div>
+            <div class="tide-next" id="tideNext"></div>
+        </section>
+
+        <!-- Mapas e imagenes -->
+        <section class="maps-section">
+            <h2>Mapas</h2>
+            <div class="maps-tabs">
+                <button class="map-tab active" data-map="wind" onclick="selectMap('wind')">Viento</button>
+                <button class="map-tab" data-map="waves" onclick="selectMap('waves')">Olas</button>
+                <button class="map-tab" data-map="rain" onclick="selectMap('rain')">Lluvia</button>
+                <button class="map-tab" data-map="clouds" onclick="selectMap('clouds')">Nubes</button>
+                <button class="map-tab" data-map="satellite" onclick="selectMap('satellite')">Satelite</button>
+                <button class="map-tab" data-map="radar" onclick="selectMap('radar')">Radar</button>
+            </div>
+            <div class="map-container" id="mapContainer">
+                <iframe id="windyFrame" class="map-frame" loading="lazy"
+                    src="https://embed.windy.com/embed.html?type=map&location=coordinates&metricRain=mm&metricTemp=%C2%B0C&metricWind=km%2Fh&zoom=8&overlay=wind&product=ecmwf&level=surface&lat=43.54&lon=-6.54&message=true"
+                    frameborder="0"></iframe>
+            </div>
+        </section>
+
+        <!-- Feedback -->
+        <section class="feedback-section">
+            <h2>Tu feedback</h2>
+            <p class="feedback-desc">Registra como fue el dia para mejorar las predicciones.</p>
+            <form id="feedbackForm" class="feedback-form">
+                <div class="form-row">
+                    <label>Fecha</label>
+                    <input type="date" name="date" id="fbDate" required>
+                </div>
+                <div class="form-row">
+                    <label>Saliste a navegar?</label>
+                    <div class="toggle-group">
+                        <button type="button" class="toggle-btn" data-field="salida" data-value="1">Si</button>
+                        <button type="button" class="toggle-btn active" data-field="salida" data-value="0">No</button>
+                    </div>
+                </div>
+                <div class="form-row">
+                    <label>Tu puntuacion real (1-10)</label>
+                    <div class="score-selector" id="scoreSelector">
+                        <button type="button" data-val="1">1</button>
+                        <button type="button" data-val="2">2</button>
+                        <button type="button" data-val="3">3</button>
+                        <button type="button" data-val="4">4</button>
+                        <button type="button" data-val="5">5</button>
+                        <button type="button" data-val="6">6</button>
+                        <button type="button" data-val="7">7</button>
+                        <button type="button" data-val="8">8</button>
+                        <button type="button" data-val="9">9</button>
+                        <button type="button" data-val="10">10</button>
+                    </div>
+                </div>
+                <div class="form-row">
+                    <label>Viento</label>
+                    <select name="viento_real">
+                        <option value="">-- Selecciona --</option>
+                        <option value="calma">Calma</option>
+                        <option value="suave">Suave</option>
+                        <option value="moderado">Moderado</option>
+                        <option value="fuerte">Fuerte</option>
+                        <option value="muy_fuerte">Muy fuerte</option>
+                    </select>
+                </div>
+                <div class="form-row">
+                    <label>Oleaje</label>
+                    <select name="oleaje_real">
+                        <option value="">-- Selecciona --</option>
+                        <option value="llana">Llana</option>
+                        <option value="rizada">Rizada</option>
+                        <option value="marejadilla">Marejadilla</option>
+                        <option value="marejada">Marejada</option>
+                        <option value="fuerte">Fuerte marejada</option>
+                    </select>
+                </div>
+                <div class="form-row">
+                    <label>Lluvia</label>
+                    <select name="lluvia_real">
+                        <option value="">-- Selecciona --</option>
+                        <option value="nada">Nada</option>
+                        <option value="llovizna">Llovizna</option>
+                        <option value="moderada">Moderada</option>
+                        <option value="fuerte">Fuerte</option>
+                    </select>
+                </div>
+                <div class="form-row">
+                    <label>Comentario</label>
+                    <textarea name="comentario" rows="2" placeholder="Notas sobre la jornada..."></textarea>
+                </div>
+                <button type="submit" class="btn-submit">Guardar feedback</button>
+                <div class="form-message" id="formMessage"></div>
+            </form>
+
+            <div class="feedback-history" id="feedbackHistory"></div>
+        </section>
+    </main>
+
+    <footer>
+        <p>TiempoLuarca &middot; Datos: AEMET (Cabo Busto), Open-Meteo, IHM</p>
+    </footer>
+
+    <script src="/static/app.js?v=2"></script>
+</body>
+</html>
