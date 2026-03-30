@@ -274,7 +274,7 @@ async def get_open_meteo_marine() -> list | None:
     params = {
         "latitude": LUARCA_LAT,
         "longitude": LUARCA_LON,
-        "hourly": "wave_height,wave_direction,wave_period,swell_wave_height,swell_wave_period,swell_wave_direction,wind_wave_height,wind_wave_period,wind_wave_direction",
+        "hourly": "wave_height,wave_direction,wave_period,swell_wave_height,swell_wave_period,swell_wave_direction,wind_wave_height,wind_wave_period,wind_wave_direction,sea_surface_temperature",
         "timezone": "Europe/Madrid",
         "forecast_days": 7,
     }
@@ -299,6 +299,7 @@ async def get_open_meteo_marine() -> list | None:
                 "viento_ola_altura": hourly.get("wind_wave_height", [None])[i],
                 "viento_ola_periodo": hourly.get("wind_wave_period", [None])[i],
                 "viento_ola_direccion": hourly.get("wind_wave_direction", [None])[i],
+                "temp_agua": hourly.get("sea_surface_temperature", [None])[i],
                 "fuente": "Open-Meteo Marine",
             })
         return result

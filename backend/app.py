@@ -372,6 +372,7 @@ async def api_forecast():
             "swell_periodo": m.get("swell_periodo") if m else None,
             "viento_ola_altura": m.get("viento_ola_altura") if m else None,
             "viento_ola_periodo": m.get("viento_ola_periodo") if m else None,
+            "temp_agua": m.get("temp_agua") if m else None,
             **scored,
         })
 

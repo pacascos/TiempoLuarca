@@ -206,6 +206,9 @@ function renderCurrent(data) {
         if (!extra && marine.ola_periodo != null) {
             extra = `Periodo: ${marine.ola_periodo.toFixed(0)}s`;
         }
+        if (marine.temp_agua != null) {
+            extra += (extra ? ' · ' : '') + `Agua: ${marine.temp_agua.toFixed(1)}°`;
+        }
         document.getElementById('valPeriodo').textContent = extra;
     }
 
@@ -466,6 +469,7 @@ function renderForecastTable(hours) {
             <td style="color:${vc}">${visTxt}</td>
             <td style="color:${nc}">${nubTxt}</td>
             <td style="color:${tc}">${formatNum(h.temperatura)}°</td>
+            <td style="color:${h.temp_agua != null ? tempColor(h.temp_agua) : ''}">${h.temp_agua != null ? h.temp_agua.toFixed(1) + '°' : '--'}</td>
         </tr>`;
     }).join('');
 }

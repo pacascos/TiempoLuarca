@@ -51,7 +51,17 @@
       "Read(//Users/cascos/code/**)",
       "Bash(tar czf:*)",
       "Bash(python3 -c \"import sys,json; d=json.load\\(sys.stdin\\); print\\(f''''Score: {d.get\\(\"\"score\"\",{}\\).get\\(\"\"score\"\"\\)}''''\\)\")",
-      "Bash(git push:*)"
+      "Bash(git push:*)",
+      "Bash(curl -s \"https://marine-api.open-meteo.com/v1/marine?latitude=43.54&longitude=-6.54&current=sea_surface_temperature&timezone=Europe/Madrid\")",
+      "Bash(curl -s \"https://marine-api.open-meteo.com/v1/marine?latitude=43.54&longitude=-6.54&hourly=sea_surface_temperature&timezone=Europe/Madrid&forecast_days=1\")",
+      "Bash(curl -s \"https://marine-api.open-meteo.com/v1/marine?latitude=43.54&longitude=-6.54&current=wave_height,wave_period,wave_direction,sea_surface_temperature&hourly=sea_surface_temperature,wave_height&timezone=Europe/Madrid\")",
+      "Bash(curl -s \"https://portus.puertos.es/Portal/Portal/getStationData?stationId=1&sensorId=1\")",
+      "Bash(curl -s \"https://portus.puertos.es/Portal/Portal\")",
+      "WebFetch(domain:marine.copernicus.eu)",
+      "Bash(curl -s \"https://opendata.aemet.es/opendata/api/prediccion/especifica/playa/3301002?api_key=eyJhbGciOiJIUzI1NiJ9.test\")",
+      "Bash(curl:*)",
+      "WebFetch(domain:pypi.org)",
+      "WebFetch(domain:github.com)"
     ]
   }
 }
