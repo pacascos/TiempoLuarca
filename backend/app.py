@@ -295,6 +295,7 @@ async def api_current():
                 "visibilidad": result_now.score_visibilidad,
                 "racha": result_now.score_racha,
                 "nubosidad": result_now.score_nubosidad,
+                "presion": result_now.score_presion,
                 "temperatura": result_now.score_temperatura,
             },
             "hora_scores": hour_scores,
@@ -318,6 +319,40 @@ async def api_current():
             "fuente": "Open-Meteo (fallback)",
         }
 
+    # Tendencia de presión: comparar ahora con hace 6h y con +6h
+    presion_trend = None
+    if current_forecast and forecast:
+        presion_ahora = current_forecast.get("presion")
+        # Buscar presión hace 6h
+        h_6ago = (now - timedelta(hours=6)).strftime("%Y-%m-%dT%H")
+        h_6fut = (now + timedelta(hours=6)).strftime("%Y-%m-%dT%H")
+        presion_6h_ago = None
+        presion_6h_fut = None
+        for f in forecast:
+            ts = f.get("timestamp", "")[:13]
+            if ts == h_6ago:
+                presion_6h_ago = f.get("presion")
+            if ts == h_6fut:
+                presion_6h_fut = f.get("presion")
+        if presion_ahora and presion_6h_ago:
+            diff = round(presion_ahora - presion_6h_ago, 1)
+            if diff <= -4:
+                trend_label = "Bajando rapido"
+            elif diff <= -2:
+                trend_label = "Bajando"
+            elif diff >= 4:
+                trend_label = "Subiendo rapido"
+            elif diff >= 2:
+                trend_label = "Subiendo"
+            else:
+                trend_label = "Estable"
+            presion_trend = {
+                "diff_6h": diff,
+                "label": trend_label,
+                "presion_6h_ago": presion_6h_ago,
+                "presion_6h_fut": presion_6h_fut,
+            }
+
     return {
         "observacion": obs_response,
         "marine": current_marine,
@@ -326,6 +361,7 @@ async def api_current():
             "visibilidad": current_forecast.get("visibilidad") if current_forecast else None,
             "prob_precipitacion": current_forecast.get("prob_precipitacion") if current_forecast else None,
         } if current_forecast else None,
+        "presion_trend": presion_trend,
         "score": score_data,
         "playa": (_cache.get("prediccion_playa") or [None])[0] if _cache.get("prediccion_playa") else None,
         "costera": _cache.get("prediccion_costera"),
@@ -348,11 +384,28 @@ async def api_forecast():
         ts = m.get("timestamp", "")[:13]  # "2024-01-01T12"
         marine_by_hour[ts] = m
 
+    # Indexar presion por hora para calcular tendencia 6h
+    presion_by_hour = {}
+    for f in forecast:
+        ts = f.get("timestamp", "")[:13]
+        if f.get("presion") is not None:
+            presion_by_hour[ts] = f["presion"]
+
     result = []
     for f in forecast:
         ts = f.get("timestamp", "")[:13]
         m = marine_by_hour.get(ts)
-        scored = score_forecast_hour(f, m)
+        # Tendencia presion: valor actual - valor 6h antes
+        p_trend = None
+        if f.get("presion") is not None:
+            try:
+                h_dt = datetime.fromisoformat(f["timestamp"])
+                h_6ago = (h_dt - timedelta(hours=6)).strftime("%Y-%m-%dT%H")
+                if h_6ago in presion_by_hour:
+                    p_trend = round(f["presion"] - presion_by_hour[h_6ago], 1)
+            except Exception:
+                pass
+        scored = score_forecast_hour(f, m, presion_trend=p_trend)
         result.append({
             "timestamp": f.get("timestamp"),
             "temperatura": f.get("temperatura"),

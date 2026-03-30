@@ -30,6 +30,7 @@ class ScoringInput:
     visibilidad_m: float | None = None
     nubosidad: float | None = None       # % cobertura nubes (0=despejado, 100=cubierto)
     presion_hpa: float | None = None
+    presion_trend_6h: float | None = None  # cambio en hPa últimas 6h (negativo=bajando)
     temperatura: float | None = None
 
 
@@ -41,6 +42,7 @@ class ScoringResult:
     score_lluvia: int
     score_visibilidad: int
     score_nubosidad: int
+    score_presion: int
     score_racha: int
     score_temperatura: int
     label: str
@@ -247,6 +249,26 @@ def _score_temperatura(temp_c: float | None) -> int:
     return 1
 
 
+def _score_presion(trend_6h: float | None) -> int:
+    """Tendencia de presion en 6h → score 10(estable/subiendo)-1(cayendo en picado).
+    Lo que importa es la CAIDA rapida = borrasca acercandose."""
+    if trend_6h is None:
+        return 7
+    if trend_6h >= 3:
+        return 9   # subiendo rapido, mejorando
+    if trend_6h >= 1:
+        return 10  # subiendo, buen tiempo
+    if trend_6h >= -1:
+        return 9   # estable
+    if trend_6h >= -2:
+        return 7   # bajando lento
+    if trend_6h >= -3:
+        return 5   # bajando
+    if trend_6h >= -5:
+        return 3   # bajando rapido, atencion
+    return 1       # desplome, borrasca inminente
+
+
 def _score_nubosidad(pct: float | None) -> int:
     """Cobertura de nubes % → score 10(despejado)-1(cubierto).
     Afecta al confort y a la seguridad (visibilidad en costa)."""
@@ -342,14 +364,16 @@ LABELS = {
 # ─── Cálculo principal ───────────────────────────────────────────────────────
 
 WEIGHTS = {
-    "viento": 0.25,
-    "oleaje": 0.25,
-    "racha": 0.10,
-    "lluvia": 0.10,
-    "visibilidad": 0.08,
-    "nubosidad": 0.07,
-    "temperatura": 0.08,
-    "confort": 0.07,  # combinación lluvia+nubes+temp que afecta a la experiencia
+    "viento": 0.23,
+    "oleaje": 0.23,
+    "racha": 0.09,
+    "lluvia": 0.09,
+    "visibilidad": 0.07,
+    "nubosidad": 0.05,
+    "presion": 0.06,   # tendencia barométrica
+    "temperatura": 0.06,
+    "confort": 0.06,
+    "estabilidad": 0.06,  # combinación presión + visibilidad (seguridad)
 }
 
 
@@ -361,10 +385,11 @@ def calculate_score(inp: ScoringInput) -> ScoringResult:
     sl = _score_lluvia(inp.prob_precipitacion, inp.precipitacion_mm)
     svis = _score_visibilidad(inp.visibilidad_m)
     snub = _score_nubosidad(inp.nubosidad)
+    spres = _score_presion(inp.presion_trend_6h)
     stemp = _score_temperatura(inp.temperatura)
 
-    # Score de confort: combina lluvia + nubes + temperatura
     confort = round((sl + snub + stemp) / 3)
+    estabilidad = round((spres + svis) / 2)
 
     weighted = (
         sv * WEIGHTS["viento"]
@@ -373,13 +398,15 @@ def calculate_score(inp: ScoringInput) -> ScoringResult:
         + sl * WEIGHTS["lluvia"]
         + svis * WEIGHTS["visibilidad"]
         + snub * WEIGHTS["nubosidad"]
+        + spres * WEIGHTS["presion"]
         + stemp * WEIGHTS["temperatura"]
         + confort * WEIGHTS["confort"]
+        + estabilidad * WEIGHTS["estabilidad"]
     )
 
     score = max(1, min(10, round(weighted)))
 
-    # Reglas de seguridad: los factores críticos limitan el score
+    # Reglas de seguridad
     if min(sv, so, sr) <= 2:
         score = min(score, 4)
     if min(sv, so) <= 3:
@@ -388,9 +415,11 @@ def calculate_score(inp: ScoringInput) -> ScoringResult:
         score = min(score, 6)
     if sr <= 3:
         score = min(score, 5)
-    # Visibilidad muy mala es peligrosa en costa
     if svis <= 2:
         score = min(score, 4)
+    # Presion cayendo rapido = borrasca, limitar score
+    if spres <= 3:
+        score = min(score, 5)
 
     label, color, recomendacion = LABELS[score]
 
@@ -401,6 +430,7 @@ def calculate_score(inp: ScoringInput) -> ScoringResult:
         score_lluvia=sl,
         score_visibilidad=svis,
         score_nubosidad=snub,
+        score_presion=spres,
         score_racha=sr,
         score_temperatura=stemp,
         label=label,
@@ -420,7 +450,7 @@ def calculate_score(inp: ScoringInput) -> ScoringResult:
     )
 
 
-def score_forecast_hour(forecast_entry: dict, marine_entry: dict | None = None) -> dict:
+def score_forecast_hour(forecast_entry: dict, marine_entry: dict | None = None, presion_trend: float | None = None) -> dict:
     """Calcula el score para una hora de pronóstico combinando datos meteorológicos y marinos."""
     inp = ScoringInput(
         viento_nudos=forecast_entry.get("viento_nudos"),
@@ -431,6 +461,7 @@ def score_forecast_hour(forecast_entry: dict, marine_entry: dict | None = None) 
         presion_hpa=forecast_entry.get("presion"),
         temperatura=forecast_entry.get("temperatura"),
         nubosidad=forecast_entry.get("nubosidad"),
+        presion_trend_6h=presion_trend,
     )
     if marine_entry:
         inp.ola_altura = marine_entry.get("ola_altura")
@@ -453,6 +484,7 @@ def score_forecast_hour(forecast_entry: dict, marine_entry: dict | None = None) 
             "visibilidad": result.score_visibilidad,
             "racha": result.score_racha,
             "nubosidad": result.score_nubosidad,
+            "presion": result.score_presion,
             "temperatura": result.score_temperatura,
         },
         "detalle": result.detalle,

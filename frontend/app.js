@@ -146,12 +146,14 @@ function renderCurrent(data) {
             obs.viento_racha_nudos != null ? `Racha: ${knToDisplay(obs.viento_racha_nudos)} ${windLabel()} · ${windDirLabel(obs.viento_dir)}` : '';
         document.getElementById('valTemp').textContent =
             obs.temperatura != null ? obs.temperatura.toFixed(1) : '--';
-        // Temp agua del marine + presion
+        // Temp agua en pastilla temperatura
         const tempAgua = data.marine?.temp_agua;
-        let tempExtra = '';
-        if (tempAgua != null) tempExtra += `Agua: ${tempAgua.toFixed(1)}°`;
-        if (obs.presion != null) tempExtra += (tempExtra ? ' · ' : '') + `${obs.presion} hPa`;
-        document.getElementById('valPresion').textContent = tempExtra;
+        document.getElementById('valTempExtra').textContent =
+            tempAgua != null ? `Agua: ${tempAgua.toFixed(1)}°` : '';
+        // Presion en su pastilla
+        if (obs.presion != null) {
+            document.getElementById('valPresion').textContent = Math.round(obs.presion);
+        }
         // Visibilidad (AEMET da km, Open-Meteo da metros)
         const visKm = obs.visibilidad != null ? obs.visibilidad : null;
         document.getElementById('valVisibilidad').textContent = visKm != null ? (visKm > 1 ? Math.round(visKm) : visKm.toFixed(1)) : '--';
@@ -186,12 +188,23 @@ function renderCurrent(data) {
         document.getElementById('valLluvia').textContent = Math.round(fcNow.prob_precipitacion) + '%';
     }
 
+    // Tendencia de presion
+    const pt = data.presion_trend;
+    if (pt) {
+        const arrow = pt.diff_6h > 0 ? '&#9650;' : pt.diff_6h < 0 ? '&#9660;' : '&#9654;';
+        const sign = pt.diff_6h > 0 ? '+' : '';
+        const trendColor = pt.diff_6h <= -3 ? '#F44336' : pt.diff_6h <= -1 ? '#FFAB00' : pt.diff_6h >= 1 ? '#00C853' : '#8895a7';
+        document.getElementById('valPresionTrend').innerHTML =
+            `<span style="color:${trendColor}">${arrow} ${sign}${pt.diff_6h} hPa/6h · ${pt.label}</span>`;
+    }
+
     // Score bars
     const fc = data.score;
     if (fc && fc.scores) {
         setScoreBar('barLluvia', fc.scores.lluvia);
         setScoreBar('barVisibilidad', fc.scores.visibilidad);
         if (fc.scores.nubosidad != null) setScoreBar('barNubosidad', fc.scores.nubosidad);
+        if (fc.scores.presion != null) setScoreBar('barPresion', fc.scores.presion);
         if (fc.scores.temperatura != null) setScoreBar('barTemp', fc.scores.temperatura);
     }
 
@@ -1004,6 +1017,13 @@ const CHART_CONFIG = {
         ],
         unitFn: () => '%',
     },
+    presion: {
+        title: 'Presion atmosferica - proximas 48h',
+        series: [
+            { key: 'presion', label: 'Presion (hPa)', color: '#8b5cf6', convert: v => v },
+        ],
+        unitFn: () => 'hPa',
+    },
     visibilidad: {
         title: 'Visibilidad - proximas 48h',
         series: [
@@ -1042,7 +1062,7 @@ window.toggleChart = function(type) {
     activeChart = type;
     panel.classList.add('open');
 
-    const cardMap = { viento: 'cardViento', oleaje: 'cardOleaje', lluvia: 'cardLluvia', visibilidad: 'cardVisibilidad', nubosidad: 'cardNubes', temperatura: 'cardTemp' };
+    const cardMap = { viento: 'cardViento', oleaje: 'cardOleaje', lluvia: 'cardLluvia', visibilidad: 'cardVisibilidad', nubosidad: 'cardNubes', temperatura: 'cardTemp', presion: 'cardPresion' };
     const card = document.getElementById(cardMap[type]);
     if (card) card.classList.add('active');
 
