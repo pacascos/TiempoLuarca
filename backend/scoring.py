@@ -132,24 +132,24 @@ def _score_oleaje(inp) -> int:
 def _score_swell(altura_m: float, periodo_s: float | None) -> int:
     """Mar de fondo (swell) para Antares 6.5.
     En el Cantábrico 0.5-1m es lo habitual en buen día.
-    2m+ ya es considerable para 6.5m de eslora."""
+    1.5m+ ya incomodo, 2m+ no salir."""
     if altura_m <= 0.3:
         base = 10
-    elif altura_m <= 0.6:
+    elif altura_m <= 0.5:
         base = 9
-    elif altura_m <= 0.9:
+    elif altura_m <= 0.7:
         base = 8
-    elif altura_m <= 1.2:
+    elif altura_m <= 1.0:
         base = 7
-    elif altura_m <= 1.5:
+    elif altura_m <= 1.3:
         base = 6
-    elif altura_m <= 1.8:
+    elif altura_m <= 1.5:
         base = 5
-    elif altura_m <= 2.0:
+    elif altura_m <= 1.8:
         base = 4
-    elif altura_m <= 2.5:
+    elif altura_m <= 2.0:
         base = 3
-    elif altura_m <= 3.0:
+    elif altura_m <= 2.5:
         base = 2
     else:
         base = 1
@@ -163,22 +163,22 @@ def _score_swell(altura_m: float, periodo_s: float | None) -> int:
 
 def _score_chop(altura_m: float, periodo_s: float | None) -> int:
     """Mar de viento (chop). Muy incómodo en barco pequeño.
-    0.5m de chop ya se nota mucho, 1m+ es peligroso."""
+    0.3m ya se nota, 0.7m+ peligroso."""
     if altura_m <= 0.1:
         base = 10
-    elif altura_m <= 0.2:
+    elif altura_m <= 0.15:
         base = 9
-    elif altura_m <= 0.3:
+    elif altura_m <= 0.25:
         base = 8
-    elif altura_m <= 0.5:
+    elif altura_m <= 0.4:
         base = 7
-    elif altura_m <= 0.7:
+    elif altura_m <= 0.5:
         base = 5
-    elif altura_m <= 0.9:
+    elif altura_m <= 0.7:
         base = 4
-    elif altura_m <= 1.2:
+    elif altura_m <= 1.0:
         base = 3
-    elif altura_m <= 1.5:
+    elif altura_m <= 1.3:
         base = 2
     else:
         base = 1
@@ -193,23 +193,23 @@ def _score_chop(altura_m: float, periodo_s: float | None) -> int:
 
 def _score_ola_total(altura_m: float, periodo_s: float | None) -> int:
     """Fallback cuando no hay desglose swell/chop."""
-    if altura_m <= 0.3:
+    if altura_m <= 0.2:
         base = 10
-    elif altura_m <= 0.5:
+    elif altura_m <= 0.4:
         base = 9
-    elif altura_m <= 0.8:
+    elif altura_m <= 0.6:
         base = 8
-    elif altura_m <= 1.0:
+    elif altura_m <= 0.8:
         base = 7
-    elif altura_m <= 1.3:
+    elif altura_m <= 1.0:
         base = 6
-    elif altura_m <= 1.6:
+    elif altura_m <= 1.3:
         base = 5
-    elif altura_m <= 2.0:
+    elif altura_m <= 1.6:
         base = 4
-    elif altura_m <= 2.5:
+    elif altura_m <= 2.0:
         base = 3
-    elif altura_m <= 3.0:
+    elif altura_m <= 2.5:
         base = 2
     else:
         base = 1
