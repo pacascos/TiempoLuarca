@@ -412,7 +412,9 @@ function tempColor(c) {
 
 function renderForecastTable(hours) {
     const tbody = document.getElementById('forecastBody');
-    const nowHour = new Date().toISOString().slice(0, 13); // "2026-03-30T10"
+    // Hora local en formato "YYYY-MM-DDTHH" para comparar con timestamps del forecast
+    const now = new Date();
+    const nowHour = now.getFullYear() + '-' + String(now.getMonth()+1).padStart(2,'0') + '-' + String(now.getDate()).padStart(2,'0') + 'T' + String(now.getHours()).padStart(2,'0');
     tbody.innerHTML = hours.map(h => {
         const score = h.score || 5;
         const color = SCORE_COLORS[score] || '#666';
