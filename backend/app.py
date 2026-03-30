@@ -162,7 +162,9 @@ async def lifespan(app: FastAPI):
     scheduler.shutdown()
 
 
-app = FastAPI(title="TiempoLuarca", version="1.0.0", lifespan=lifespan)
+from backend.config import ROOT_PATH
+
+app = FastAPI(title="TiempoLuarca", version="1.0.0", lifespan=lifespan, root_path=ROOT_PATH)
 app.mount("/static", StaticFiles(directory="frontend"), name="static")
 
 

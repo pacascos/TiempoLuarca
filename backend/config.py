@@ -7,6 +7,7 @@ AEMET_API_KEY = os.getenv("AEMET_API_KEY")
 DATABASE_PATH = os.getenv("DATABASE_PATH", "data/tiempoluarca.db")
 HOST = os.getenv("HOST", "0.0.0.0")
 PORT = int(os.getenv("PORT", "8000"))
+ROOT_PATH = os.getenv("ROOT_PATH", "")  # ej: "/tiempo" si se sirve bajo subpath
 
 # Coordenadas de Luarca
 LUARCA_LAT = 43.5414

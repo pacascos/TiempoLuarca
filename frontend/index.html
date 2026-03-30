@@ -4,7 +4,13 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>TiempoLuarca - Navegacion</title>
-    <link rel="stylesheet" href="/static/styles.css?v=2">
+    <script>
+        // Detectar base URL para que funcione bajo cualquier subpath
+        const scriptUrl = document.currentScript ? document.currentScript.src : '';
+        const basePath = window.location.pathname.endsWith('/') ? window.location.pathname : window.location.pathname + '/';
+        window.__BASE = basePath;
+    </script>
+    <link rel="stylesheet" href="static/styles.css?v=3">
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/weather-icons/2.0.12/css/weather-icons.min.css">
     <link rel="preconnect" href="https://fonts.googleapis.com">
     <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800;900&display=swap" rel="stylesheet">
@@ -260,6 +266,6 @@
         <p>TiempoLuarca &middot; Datos: AEMET (Cabo Busto), Open-Meteo, IHM</p>
     </footer>
 
-    <script src="/static/app.js?v=2"></script>
+    <script src="static/app.js?v=3"></script>
 </body>
 </html>

@@ -1,5 +1,8 @@
 // ─── TiempoLuarca Frontend ───────────────────────────────────────────────────
 
+const BASE = window.__BASE || '/';
+function apiUrl(path) { return BASE + path; }
+
 const SCORE_COLORS = {
     10: '#00C853', 9: '#64DD17', 8: '#AEEA00', 7: '#FFD600', 6: '#FFAB00',
     5: '#FF6D00', 4: '#FF3D00', 3: '#E53935', 2: '#F44336', 1: '#EF5350'
@@ -64,7 +67,7 @@ async function loadAll() {
 
 async function loadCurrent() {
     try {
-        const res = await fetch('/api/current');
+        const res = await fetch(apiUrl('api/current'));
         const data = await res.json();
         renderCurrent(data);
     } catch (e) {
@@ -167,7 +170,7 @@ function windDirLabel(degrees) {
 
 async function loadSummary() {
     try {
-        const res = await fetch('/api/summary');
+        const res = await fetch(apiUrl('api/summary'));
         const data = await res.json();
         renderSummary(data);
     } catch (e) {
@@ -215,7 +218,7 @@ function formatDate(dateStr) {
 
 async function loadForecast() {
     try {
-        const res = await fetch('/api/forecast');
+        const res = await fetch(apiUrl('api/forecast'));
         const data = await res.json();
         forecastData = data.forecast || [];
         renderForecastTabs();
@@ -376,7 +379,7 @@ let selectedTideStation = 'navia';
 
 async function loadTides() {
     try {
-        const res = await fetch('/api/tides');
+        const res = await fetch(apiUrl('api/tides'));
         tidesData = await res.json();
         drawTideChart();
     } catch (e) {
@@ -801,7 +804,7 @@ function setupFeedbackForm() {
         };
 
         try {
-            const res = await fetch('/api/feedback', {
+            const res = await fetch(apiUrl('api/feedback'), {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json' },
                 body: JSON.stringify(payload),
@@ -825,7 +828,7 @@ function setupFeedbackForm() {
 
 async function loadFeedbackHistory() {
     try {
-        const res = await fetch('/api/feedback');
+        const res = await fetch(apiUrl('api/feedback'));
         const data = await res.json();
         renderFeedbackHistory(data.feedback || []);
     } catch (e) {
