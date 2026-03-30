@@ -146,8 +146,12 @@ function renderCurrent(data) {
             obs.viento_racha_nudos != null ? `Racha: ${knToDisplay(obs.viento_racha_nudos)} ${windLabel()} · ${windDirLabel(obs.viento_dir)}` : '';
         document.getElementById('valTemp').textContent =
             obs.temperatura != null ? obs.temperatura.toFixed(1) : '--';
-        document.getElementById('valPresion').textContent =
-            obs.presion != null ? `${obs.presion} hPa` : '';
+        // Temp agua del marine + presion
+        const tempAgua = data.marine?.temp_agua;
+        let tempExtra = '';
+        if (tempAgua != null) tempExtra += `Agua: ${tempAgua.toFixed(1)}°`;
+        if (obs.presion != null) tempExtra += (tempExtra ? ' · ' : '') + `${obs.presion} hPa`;
+        document.getElementById('valPresion').textContent = tempExtra;
         // Visibilidad (AEMET da km, Open-Meteo da metros)
         const visKm = obs.visibilidad != null ? obs.visibilidad : null;
         document.getElementById('valVisibilidad').textContent = visKm != null ? (visKm > 1 ? Math.round(visKm) : visKm.toFixed(1)) : '--';
@@ -205,9 +209,6 @@ function renderCurrent(data) {
         }
         if (!extra && marine.ola_periodo != null) {
             extra = `Periodo: ${marine.ola_periodo.toFixed(0)}s`;
-        }
-        if (marine.temp_agua != null) {
-            extra += (extra ? ' · ' : '') + `Agua: ${marine.temp_agua.toFixed(1)}°`;
         }
         document.getElementById('valPeriodo').textContent = extra;
     }
