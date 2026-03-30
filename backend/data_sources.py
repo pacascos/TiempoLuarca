@@ -18,6 +18,21 @@ from backend.config import (
 
 logger = logging.getLogger(__name__)
 
+
+def _utc_to_local(hora_str: str, fecha_str: str) -> tuple[str, str]:
+    """Convierte hora UTC (HH:MM) + fecha (YYYY-MM-DD) a hora local de España.
+    Devuelve (hora_local, fecha_local) porque al sumar puede cambiar de día."""
+    try:
+        hh, mm = map(int, hora_str.split(":"))
+        # Calcular offset UTC de Europe/Madrid para esa fecha
+        from datetime import timezone
+        dt_utc = datetime.strptime(f"{fecha_str} {hora_str}", "%Y-%m-%d %H:%M").replace(tzinfo=timezone.utc)
+        # Usar el offset local del sistema (asumiendo servidor en España)
+        dt_local = dt_utc.astimezone()
+        return dt_local.strftime("%H:%M"), dt_local.strftime("%Y-%m-%d")
+    except Exception:
+        return hora_str, fecha_str
+
 AEMET_HEADERS = {"api_key": AEMET_API_KEY}
 TIMEOUT = 15.0
 
@@ -249,9 +264,12 @@ async def get_ihm_mareas(days: int = 3) -> dict | None:
                     fecha_str = mareas_obj.get("fecha", date.strftime("%Y-%m-%d"))
 
                     for marea in marea_list:
+                        # IHM devuelve horas en UTC, convertir a Europe/Madrid
+                        hora_utc = marea.get("hora", "")
+                        hora_local, fecha_local = _utc_to_local(hora_utc, fecha_str)
                         tides.append({
-                            "fecha": fecha_str,
-                            "hora": marea.get("hora", ""),
+                            "fecha": fecha_local,
+                            "hora": hora_local,
                             "altura": float(marea.get("altura", 0)),
                             "tipo": marea.get("tipo", ""),
                         })
