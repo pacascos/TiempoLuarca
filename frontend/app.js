@@ -239,7 +239,7 @@ function renderSummary(data) {
             </div>`;
         }
         const color = d.color || '#666';
-        return `<div class="summary-card" style="border-top: 3px solid ${color}">
+        return `<div class="summary-card clickable" style="border-top: 3px solid ${color}" onclick="goToForecastDay('${d.fecha}')">
             <div class="summary-day">${d.label}</div>
             <div class="summary-date">${formatDate(d.fecha)}</div>
             <div class="summary-score" style="color: ${color}">${d.score_medio}</div>
@@ -254,6 +254,12 @@ function renderSummary(data) {
         </div>`;
     }).join('');
 }
+
+window.goToForecastDay = function(date) {
+    selectForecastDay(date);
+    // Scroll a la sección de pronóstico
+    document.querySelector('.forecast-section')?.scrollIntoView({ behavior: 'smooth', block: 'start' });
+};
 
 function formatDate(dateStr) {
     if (!dateStr) return '';
@@ -406,10 +412,12 @@ function tempColor(c) {
 
 function renderForecastTable(hours) {
     const tbody = document.getElementById('forecastBody');
+    const nowHour = new Date().toISOString().slice(0, 13); // "2026-03-30T10"
     tbody.innerHTML = hours.map(h => {
         const score = h.score || 5;
         const color = SCORE_COLORS[score] || '#666';
         const time = h.timestamp.slice(11, 16);
+        const isNow = h.timestamp.slice(0, 13) === nowHour;
         const windDir = h.viento_dir != null ? h.viento_dir : '';
         const wc = windColor(h.viento_nudos);
         const rc = windColor(h.viento_racha_nudos);
@@ -433,8 +441,8 @@ function renderForecastTable(hours) {
         const visTxt = visKm != null ? (visKm >= 10 ? Math.round(visKm) + 'km' : visKm.toFixed(1) + 'km') : '--';
         // Nubosidad
         const nubTxt = h.nubosidad != null ? Math.round(h.nubosidad) + '%' : '--';
-        return `<tr>
-            <td><strong>${time}</strong></td>
+        return `<tr class="${isNow ? 'current-hour' : ''}">
+            <td><strong>${time}</strong>${isNow ? ' <small>AHORA</small>' : ''}</td>
             <td><span class="score-badge" style="background: ${color}">${score}</span></td>
             <td style="color:${wc}">${formatNum(knToDisplay(h.viento_nudos))} ${windLabel()} ${windDir ? `<span class="wind-arrow" style="transform: rotate(${windDir}deg)">&#8593;</span>` : ''}</td>
             <td style="color:${rc}">${formatNum(knToDisplay(h.viento_racha_nudos))} ${windLabel()}</td>
