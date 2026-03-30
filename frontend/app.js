@@ -93,6 +93,21 @@ function renderCurrent(data) {
         document.getElementById('scoreNumber').style.color = color;
         document.getElementById('scoreLabel').textContent = score.label;
         document.getElementById('scoreLabel').style.color = color;
+
+        // Tendencia
+        const trend = score.tendencia;
+        const trendEl = document.getElementById('scoreTrend');
+        if (trendEl && trend) {
+            const trendIcons = { mejorando: '&#9650;', empeorando: '&#9660;', estable: '&#9654;' };
+            const trendColors = { mejorando: '#00C853', empeorando: '#F44336', estable: '#FFAB00' };
+            const trendLabels = { mejorando: 'Mejorando', empeorando: 'Empeorando', estable: 'Estable' };
+            trendEl.innerHTML = `<span style="color:${trendColors[trend]}">${trendIcons[trend]} ${trendLabels[trend]}</span>`;
+            // Mostrar contexto si hay diferencia entre ahora y 5h
+            if (score.score_ahora && score.score_ahora !== s) {
+                trendEl.innerHTML += ` <span class="trend-detail">Ahora: ${score.score_ahora} · Prox. 5h: ${score.score_5h}</span>`;
+            }
+        }
+
         document.getElementById('scoreRecommendation').textContent = score.recomendacion;
 
         // Animate ring: 10=full, 1=empty

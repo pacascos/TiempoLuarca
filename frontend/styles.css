@@ -190,10 +190,21 @@ h2 {
     text-transform: uppercase;
     letter-spacing: 0.05em;
 }
+.score-trend {
+    margin-top: 0.5rem;
+    font-size: 0.9rem;
+    font-weight: 700;
+    text-align: center;
+}
+.trend-detail {
+    font-size: 0.72rem;
+    font-weight: 500;
+    color: var(--text-dim);
+}
 .score-recommendation {
     color: var(--text-dim);
     font-size: 0.85rem;
-    margin-top: 0.4rem;
+    margin-top: 0.3rem;
     text-align: center;
     max-width: 400px;
 }

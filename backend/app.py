@@ -203,10 +203,32 @@ async def api_current():
             current_forecast = f
             break
 
-    # Calcular score: usar AEMET si hay, sino fallback a Open-Meteo forecast
+    # ─── Score principal: hora actual + próximas 4h (ventana de 5h) ──────────
+    # Indexar forecast y marine por hora
+    marine_by_hour = {}
+    for m in marine:
+        marine_by_hour[m.get("timestamp", "")[:13]] = m
+
+    # Obtener scores de las próximas 5 horas
+    hour_scores = []
+    now_dt = datetime.now()
+    for i in range(5):
+        h_dt = now_dt + timedelta(hours=i)
+        h_str = h_dt.strftime("%Y-%m-%dT%H")
+        fc_h = None
+        for f in forecast:
+            if f.get("timestamp", "").startswith(h_str):
+                fc_h = f
+                break
+        m_h = marine_by_hour.get(h_str)
+        if fc_h:
+            scored = score_forecast_hour(fc_h, m_h)
+            hour_scores.append(scored["score"])
+
+    # Para la hora actual, preferir datos de AEMET si hay
     score_data = None
-    if obs or current_forecast:
-        # Fuente de viento: AEMET obs preferido, sino Open-Meteo forecast
+    if (obs or current_forecast) and hour_scores:
+        # Score actual con AEMET (más preciso)
         if obs:
             viento = obs.get("viento_vel_nudos")
             racha = obs.get("viento_racha_nudos")
@@ -230,20 +252,52 @@ async def api_current():
             temperatura=obs.get("temperatura") if obs else (current_forecast.get("temperatura") if current_forecast else None),
             nubosidad=current_forecast.get("nubosidad") if current_forecast else None,
         )
-        result = calculate_score(inp)
+        result_now = calculate_score(inp)
+
+        # Score principal = peor de: (actual, media próximas 5h)
+        # Si las próximas horas empeoran, el score baja
+        avg_5h = round(sum(hour_scores) / len(hour_scores))
+        worst_5h = min(hour_scores)
+        # El score principal es el mínimo entre el actual y la media de 5h
+        # Así si ahora es 9 pero en 2h será 4, el principal no da 9
+        main_score = min(result_now.score, avg_5h)
+
+        from backend.scoring import LABELS
+        label, color, recomendacion = LABELS[main_score]
+
+        # Tendencia: comparar primeras 2h con últimas 2h
+        if len(hour_scores) >= 4:
+            early = sum(hour_scores[:2]) / 2
+            late = sum(hour_scores[-2:]) / 2
+            diff = late - early
+            if diff >= 1.5:
+                tendencia = "mejorando"
+            elif diff <= -1.5:
+                tendencia = "empeorando"
+            else:
+                tendencia = "estable"
+        else:
+            tendencia = "estable"
+
         score_data = {
-            "score": result.score,
-            "label": result.label,
-            "color": result.color,
-            "recomendacion": result.recomendacion,
+            "score": main_score,
+            "score_ahora": result_now.score,
+            "score_5h": avg_5h,
+            "score_peor_5h": worst_5h,
+            "tendencia": tendencia,
+            "label": label,
+            "color": color,
+            "recomendacion": recomendacion,
             "scores": {
-                "viento": result.score_viento,
-                "oleaje": result.score_oleaje,
-                "lluvia": result.score_lluvia,
-                "visibilidad": result.score_visibilidad,
-                "racha": result.score_racha,
-                "temperatura": result.score_temperatura,
+                "viento": result_now.score_viento,
+                "oleaje": result_now.score_oleaje,
+                "lluvia": result_now.score_lluvia,
+                "visibilidad": result_now.score_visibilidad,
+                "racha": result_now.score_racha,
+                "nubosidad": result_now.score_nubosidad,
+                "temperatura": result_now.score_temperatura,
             },
+            "hora_scores": hour_scores,
         }
 
     # Construir observacion fallback con datos de Open-Meteo si AEMET no responde
