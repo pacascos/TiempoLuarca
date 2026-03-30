@@ -267,6 +267,11 @@ async def api_current():
     return {
         "observacion": obs_response,
         "marine": current_marine,
+        "forecast_now": {
+            "nubosidad": current_forecast.get("nubosidad") if current_forecast else None,
+            "visibilidad": current_forecast.get("visibilidad") if current_forecast else None,
+            "prob_precipitacion": current_forecast.get("prob_precipitacion") if current_forecast else None,
+        } if current_forecast else None,
         "score": score_data,
         "playa": (_cache.get("prediccion_playa") or [None])[0] if _cache.get("prediccion_playa") else None,
         "costera": _cache.get("prediccion_costera"),

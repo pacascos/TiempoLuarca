@@ -102,13 +102,9 @@ function renderCurrent(data) {
         ring.style.strokeDashoffset = circumference * (1 - pct);
         ring.style.stroke = color;
 
-        // Score bars
+        // Score bars (seguridad)
         setScoreBar('barViento', score.scores.viento);
         setScoreBar('barOleaje', score.scores.oleaje);
-        setScoreBar('barLluvia', score.scores.lluvia);
-        setScoreBar('barVisibilidad', score.scores.visibilidad);
-        setScoreBar('barNubosidad', score.scores.nubosidad);
-        setScoreBar('barTemp', score.scores.temperatura);
     }
 
     // Observation data
@@ -128,23 +124,42 @@ function renderCurrent(data) {
         document.getElementById('valVisibilidad').textContent = visKm != null ? (visKm > 1 ? Math.round(visKm) : visKm.toFixed(1)) : '--';
     }
 
-    // Forecast data for current hour (nubosidad, lluvia)
-    const fc = data.score;
-    if (fc && fc.scores) {
-        const rainScore = fc.scores.lluvia;
-        const pcts = ['95%', '85%', '70%', '55%', '45%', '35%', '25%', '15%', '5%', '0%'];
-        document.getElementById('valLluvia').textContent = pcts[rainScore - 1] || '--';
+    // Datos del forecast para la hora actual
+    const fcNow = data.forecast_now;
 
-        // Nubosidad del forecast
-        const nubScore = fc.scores.nubosidad;
-        const nubLabels = ['Cubierto', 'Muy nublado', 'Nublado', 'Muy nublado', 'Nub. parcial', 'Intervalos', 'Poco nublado', 'Casi despejado', 'Despejado', 'Despejado'];
-        document.getElementById('valNubes').textContent = nubLabels[nubScore - 1] || '--';
+    // Visibilidad: si no hay de AEMET, usar Open-Meteo
+    if (fcNow && fcNow.visibilidad != null && document.getElementById('valVisibilidad').textContent === '--') {
+        const visKm = fcNow.visibilidad / 1000;
+        document.getElementById('valVisibilidad').textContent = visKm >= 10 ? Math.round(visKm) : visKm.toFixed(1);
+    }
 
-        // Cambiar icono de nubes segun score
+    // Nubosidad: valor directo del forecast
+    if (fcNow && fcNow.nubosidad != null) {
+        const nub = Math.round(fcNow.nubosidad);
+        document.getElementById('valNubes').textContent = nub;
+        document.getElementById('valNubesExtra').textContent =
+            nub <= 10 ? 'Despejado' : nub <= 30 ? 'Poco nublado' : nub <= 50 ? 'Intervalos' :
+            nub <= 70 ? 'Nublado' : nub <= 90 ? 'Muy nublado' : 'Cubierto';
+
+        // Icono dinamico
         const iconNubes = document.getElementById('iconNubes');
         if (iconNubes) {
-            iconNubes.className = 'wi ' + (nubScore >= 9 ? 'wi-day-sunny' : nubScore >= 7 ? 'wi-day-cloudy' : nubScore >= 4 ? 'wi-cloudy' : 'wi-cloud');
+            iconNubes.className = 'wi ' + (nub <= 15 ? 'wi-day-sunny' : nub <= 40 ? 'wi-day-cloudy' : nub <= 70 ? 'wi-cloudy' : 'wi-cloud');
         }
+    }
+
+    // Lluvia
+    if (fcNow && fcNow.prob_precipitacion != null) {
+        document.getElementById('valLluvia').textContent = Math.round(fcNow.prob_precipitacion) + '%';
+    }
+
+    // Score bars
+    const fc = data.score;
+    if (fc && fc.scores) {
+        setScoreBar('barLluvia', fc.scores.lluvia);
+        setScoreBar('barVisibilidad', fc.scores.visibilidad);
+        if (fc.scores.nubosidad != null) setScoreBar('barNubosidad', fc.scores.nubosidad);
+        if (fc.scores.temperatura != null) setScoreBar('barTemp', fc.scores.temperatura);
     }
 
     // Marine — mostrar desglose swell + chop
