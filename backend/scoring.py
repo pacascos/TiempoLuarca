@@ -28,6 +28,7 @@ class ScoringInput:
     prob_precipitacion: float | None = None
     precipitacion_mm: float | None = None
     visibilidad_m: float | None = None
+    nubosidad: float | None = None       # % cobertura nubes (0=despejado, 100=cubierto)
     presion_hpa: float | None = None
     temperatura: float | None = None
 
@@ -39,6 +40,7 @@ class ScoringResult:
     score_oleaje: int
     score_lluvia: int
     score_visibilidad: int
+    score_nubosidad: int
     score_racha: int
     score_temperatura: int
     label: str
@@ -245,6 +247,32 @@ def _score_temperatura(temp_c: float | None) -> int:
     return 1
 
 
+def _score_nubosidad(pct: float | None) -> int:
+    """Cobertura de nubes % → score 10(despejado)-1(cubierto).
+    Afecta al confort y a la seguridad (visibilidad en costa)."""
+    if pct is None:
+        return 7
+    if pct <= 10:
+        return 10
+    if pct <= 20:
+        return 9
+    if pct <= 30:
+        return 8
+    if pct <= 45:
+        return 7
+    if pct <= 55:
+        return 6
+    if pct <= 65:
+        return 5
+    if pct <= 75:
+        return 4
+    if pct <= 85:
+        return 3
+    if pct <= 95:
+        return 2
+    return 1
+
+
 def _score_lluvia(prob: float | None, mm: float | None = None) -> int:
     """Probabilidad de precipitación → score 10(seco)-1(diluvio)."""
     if prob is None:
@@ -314,12 +342,14 @@ LABELS = {
 # ─── Cálculo principal ───────────────────────────────────────────────────────
 
 WEIGHTS = {
-    "viento": 0.30,
-    "oleaje": 0.30,
+    "viento": 0.25,
+    "oleaje": 0.25,
     "racha": 0.10,
     "lluvia": 0.10,
-    "visibilidad": 0.10,
-    "temperatura": 0.10,
+    "visibilidad": 0.08,
+    "nubosidad": 0.07,
+    "temperatura": 0.08,
+    "confort": 0.07,  # combinación lluvia+nubes+temp que afecta a la experiencia
 }
 
 
@@ -330,7 +360,11 @@ def calculate_score(inp: ScoringInput) -> ScoringResult:
     so = _score_oleaje(inp)
     sl = _score_lluvia(inp.prob_precipitacion, inp.precipitacion_mm)
     svis = _score_visibilidad(inp.visibilidad_m)
+    snub = _score_nubosidad(inp.nubosidad)
     stemp = _score_temperatura(inp.temperatura)
+
+    # Score de confort: combina lluvia + nubes + temperatura
+    confort = round((sl + snub + stemp) / 3)
 
     weighted = (
         sv * WEIGHTS["viento"]
@@ -338,27 +372,25 @@ def calculate_score(inp: ScoringInput) -> ScoringResult:
         + sr * WEIGHTS["racha"]
         + sl * WEIGHTS["lluvia"]
         + svis * WEIGHTS["visibilidad"]
+        + snub * WEIGHTS["nubosidad"]
         + stemp * WEIGHTS["temperatura"]
+        + confort * WEIGHTS["confort"]
     )
 
     score = max(1, min(10, round(weighted)))
 
     # Reglas de seguridad: los factores críticos limitan el score
-    # Si viento, oleaje o racha son <= 2 → máximo 4
     if min(sv, so, sr) <= 2:
         score = min(score, 4)
-
-    # Si viento O oleaje son <= 3 → máximo 5
     if min(sv, so) <= 3:
         score = min(score, 5)
-
-    # Si oleaje <= 4 → máximo 6 (el mar es lo que más condiciona en el Cantábrico)
     if so <= 4:
         score = min(score, 6)
-
-    # Si racha <= 3 → máximo 5
     if sr <= 3:
         score = min(score, 5)
+    # Visibilidad muy mala es peligrosa en costa
+    if svis <= 2:
+        score = min(score, 4)
 
     label, color, recomendacion = LABELS[score]
 
@@ -368,6 +400,7 @@ def calculate_score(inp: ScoringInput) -> ScoringResult:
         score_oleaje=so,
         score_lluvia=sl,
         score_visibilidad=svis,
+        score_nubosidad=snub,
         score_racha=sr,
         score_temperatura=stemp,
         label=label,
@@ -397,6 +430,7 @@ def score_forecast_hour(forecast_entry: dict, marine_entry: dict | None = None) 
         visibilidad_m=forecast_entry.get("visibilidad"),
         presion_hpa=forecast_entry.get("presion"),
         temperatura=forecast_entry.get("temperatura"),
+        nubosidad=forecast_entry.get("nubosidad"),
     )
     if marine_entry:
         inp.ola_altura = marine_entry.get("ola_altura")
@@ -418,6 +452,7 @@ def score_forecast_hour(forecast_entry: dict, marine_entry: dict | None = None) 
             "lluvia": result.score_lluvia,
             "visibilidad": result.score_visibilidad,
             "racha": result.score_racha,
+            "nubosidad": result.score_nubosidad,
             "temperatura": result.score_temperatura,
         },
         "detalle": result.detalle,

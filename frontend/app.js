@@ -107,6 +107,8 @@ function renderCurrent(data) {
         setScoreBar('barOleaje', score.scores.oleaje);
         setScoreBar('barLluvia', score.scores.lluvia);
         setScoreBar('barVisibilidad', score.scores.visibilidad);
+        setScoreBar('barNubosidad', score.scores.nubosidad);
+        setScoreBar('barTemp', score.scores.temperatura);
     }
 
     // Observation data
@@ -121,6 +123,28 @@ function renderCurrent(data) {
             obs.temperatura != null ? obs.temperatura.toFixed(1) : '--';
         document.getElementById('valPresion').textContent =
             obs.presion != null ? `${obs.presion} hPa` : '';
+        // Visibilidad (AEMET da km, Open-Meteo da metros)
+        const visKm = obs.visibilidad != null ? obs.visibilidad : null;
+        document.getElementById('valVisibilidad').textContent = visKm != null ? (visKm > 1 ? Math.round(visKm) : visKm.toFixed(1)) : '--';
+    }
+
+    // Forecast data for current hour (nubosidad, lluvia)
+    const fc = data.score;
+    if (fc && fc.scores) {
+        const rainScore = fc.scores.lluvia;
+        const pcts = ['95%', '85%', '70%', '55%', '45%', '35%', '25%', '15%', '5%', '0%'];
+        document.getElementById('valLluvia').textContent = pcts[rainScore - 1] || '--';
+
+        // Nubosidad del forecast
+        const nubScore = fc.scores.nubosidad;
+        const nubLabels = ['Cubierto', 'Muy nublado', 'Nublado', 'Muy nublado', 'Nub. parcial', 'Intervalos', 'Poco nublado', 'Casi despejado', 'Despejado', 'Despejado'];
+        document.getElementById('valNubes').textContent = nubLabels[nubScore - 1] || '--';
+
+        // Cambiar icono de nubes segun score
+        const iconNubes = document.getElementById('iconNubes');
+        if (iconNubes) {
+            iconNubes.className = 'wi ' + (nubScore >= 9 ? 'wi-day-sunny' : nubScore >= 7 ? 'wi-day-cloudy' : nubScore >= 4 ? 'wi-cloudy' : 'wi-cloud');
+        }
     }
 
     // Marine — mostrar desglose swell + chop
@@ -141,13 +165,6 @@ function renderCurrent(data) {
         document.getElementById('valPeriodo').textContent = extra;
     }
 
-    // Forecast for rain (from current hour) — score 10=seco, 1=diluvio
-    const forecast = data.score;
-    if (forecast && forecast.scores) {
-        const rainScore = forecast.scores.lluvia;
-        const pcts = ['95%', '85%', '70%', '55%', '45%', '35%', '25%', '15%', '5%', '0%'];
-        document.getElementById('valLluvia').textContent = pcts[rainScore - 1] || '--';
-    }
 }
 
 function setScoreBar(id, score) {
@@ -321,6 +338,31 @@ function rainColor(pct) {
     if (pct <= 90) return SCORE_COLORS[2];
     return SCORE_COLORS[1];
 }
+function visColor(m) {
+    if (m == null) return '';
+    const km = m / 1000;
+    if (km >= 20) return SCORE_COLORS[10];
+    if (km >= 15) return SCORE_COLORS[9];
+    if (km >= 10) return SCORE_COLORS[8];
+    if (km >= 7) return SCORE_COLORS[7];
+    if (km >= 5) return SCORE_COLORS[6];
+    if (km >= 3) return SCORE_COLORS[5];
+    if (km >= 2) return SCORE_COLORS[4];
+    if (km >= 1) return SCORE_COLORS[3];
+    return SCORE_COLORS[1];
+}
+function cloudColor(pct) {
+    if (pct == null) return '';
+    if (pct <= 10) return SCORE_COLORS[10];
+    if (pct <= 25) return SCORE_COLORS[9];
+    if (pct <= 40) return SCORE_COLORS[8];
+    if (pct <= 50) return SCORE_COLORS[7];
+    if (pct <= 60) return SCORE_COLORS[6];
+    if (pct <= 70) return SCORE_COLORS[5];
+    if (pct <= 80) return SCORE_COLORS[4];
+    if (pct <= 90) return SCORE_COLORS[3];
+    return SCORE_COLORS[2];
+}
 function tempColor(c) {
     if (c == null) return '';
     if (c < 5) return '#3b82f6';
@@ -344,6 +386,8 @@ function renderForecastTable(hours) {
         const sc = swellColor(h.swell_altura);
         const cc = chopColor(h.viento_ola_altura);
         const pc = rainColor(h.prob_precipitacion);
+        const vc = visColor(h.visibilidad);
+        const nc = cloudColor(h.nubosidad);
         const tc = tempColor(h.temperatura);
         // Swell con periodo
         const swellTxt = h.swell_altura != null
@@ -354,6 +398,11 @@ function renderForecastTable(hours) {
         const chopTxt = h.viento_ola_altura != null
             ? h.viento_ola_altura.toFixed(1) + 'm' + (h.viento_ola_periodo != null ? ' <small>' + h.viento_ola_periodo.toFixed(0) + 's</small>' : '')
             : '--';
+        // Visibilidad en km
+        const visKm = h.visibilidad != null ? h.visibilidad / 1000 : null;
+        const visTxt = visKm != null ? (visKm >= 10 ? Math.round(visKm) + 'km' : visKm.toFixed(1) + 'km') : '--';
+        // Nubosidad
+        const nubTxt = h.nubosidad != null ? Math.round(h.nubosidad) + '%' : '--';
         return `<tr>
             <td><strong>${time}</strong></td>
             <td><span class="score-badge" style="background: ${color}">${score}</span></td>
@@ -362,6 +411,8 @@ function renderForecastTable(hours) {
             <td style="color:${swellClr}">${swellTxt}</td>
             <td style="color:${cc}">${chopTxt}</td>
             <td style="color:${pc}">${formatNum(h.prob_precipitacion)}%</td>
+            <td style="color:${vc}">${visTxt}</td>
+            <td style="color:${nc}">${nubTxt}</td>
             <td style="color:${tc}">${formatNum(h.temperatura)}°</td>
         </tr>`;
     }).join('');
@@ -896,6 +947,21 @@ const CHART_CONFIG = {
         ],
         unitFn: () => '%',
     },
+    visibilidad: {
+        title: 'Visibilidad - proximas 48h',
+        series: [
+            { key: 'visibilidad', label: 'Visibilidad (km)', color: '#06b6d4', convert: v => v != null ? v / 1000 : null },
+        ],
+        unitFn: () => 'km',
+    },
+    nubosidad: {
+        title: 'Nubosidad - proximas 48h',
+        series: [
+            { key: 'nubosidad', label: 'Cobertura nubes %', color: '#8b5cf6', convert: v => v },
+            { key: 'prob_precipitacion', label: 'Prob. lluvia %', color: '#3b82f6', convert: v => v, dashed: true },
+        ],
+        unitFn: () => '%',
+    },
     temperatura: {
         title: 'Temperatura - proximas 48h',
         series: [
@@ -919,7 +985,7 @@ window.toggleChart = function(type) {
     activeChart = type;
     panel.classList.add('open');
 
-    const cardMap = { viento: 'cardViento', oleaje: 'cardOleaje', lluvia: 'cardLluvia', temperatura: 'cardTemp' };
+    const cardMap = { viento: 'cardViento', oleaje: 'cardOleaje', lluvia: 'cardLluvia', visibilidad: 'cardVisibilidad', nubosidad: 'cardNubes', temperatura: 'cardTemp' };
     const card = document.getElementById(cardMap[type]);
     if (card) card.classList.add('active');
 

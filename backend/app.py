@@ -228,6 +228,7 @@ async def api_current():
             prob_precipitacion=current_forecast.get("prob_precipitacion") if current_forecast else None,
             visibilidad_m=vis,
             temperatura=obs.get("temperatura") if obs else (current_forecast.get("temperatura") if current_forecast else None),
+            nubosidad=current_forecast.get("nubosidad") if current_forecast else None,
         )
         result = calculate_score(inp)
         score_data = {

@@ -10,7 +10,7 @@
         const basePath = window.location.pathname.endsWith('/') ? window.location.pathname : window.location.pathname + '/';
         window.__BASE = basePath;
     </script>
-    <link rel="stylesheet" href="static/styles.css?v=3">
+    <link rel="stylesheet" href="static/styles.css?v=4">
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/weather-icons/2.0.12/css/weather-icons.min.css">
     <link rel="preconnect" href="https://fonts.googleapis.com">
     <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800;900&display=swap" rel="stylesheet">
@@ -102,13 +102,31 @@
                     <div class="card-score-bar"><div class="bar-fill" id="barLluvia"></div></div>
                     <div class="card-expand-hint">ver grafica</div>
                 </div>
+                <div class="data-card clickable" id="cardVisibilidad" onclick="toggleChart('visibilidad')">
+                    <div class="card-icon"><i class="wi wi-fog" style="font-size:2rem"></i></div>
+                    <div class="card-value" id="valVisibilidad">--</div>
+                    <div class="card-unit">km</div>
+                    <div class="card-label">Visibilidad</div>
+                    <div class="card-extra" id="valVisExtra"></div>
+                    <div class="card-score-bar"><div class="bar-fill" id="barVisibilidad"></div></div>
+                    <div class="card-expand-hint">ver grafica</div>
+                </div>
+                <div class="data-card clickable" id="cardNubes" onclick="toggleChart('nubosidad')">
+                    <div class="card-icon"><i class="wi wi-cloudy" id="iconNubes" style="font-size:2rem"></i></div>
+                    <div class="card-value" id="valNubes">--</div>
+                    <div class="card-unit">%</div>
+                    <div class="card-label">Nubosidad</div>
+                    <div class="card-extra" id="valNubesExtra"></div>
+                    <div class="card-score-bar"><div class="bar-fill" id="barNubosidad"></div></div>
+                    <div class="card-expand-hint">ver grafica</div>
+                </div>
                 <div class="data-card clickable" id="cardTemp" onclick="toggleChart('temperatura')">
                     <div class="card-icon"><i class="wi wi-thermometer" style="font-size:2rem"></i></div>
                     <div class="card-value" id="valTemp">--</div>
                     <div class="card-unit">&deg;C</div>
                     <div class="card-label">Temperatura</div>
                     <div class="card-extra" id="valPresion"></div>
-                    <div class="card-score-bar"><div class="bar-fill" id="barVisibilidad"></div></div>
+                    <div class="card-score-bar"><div class="bar-fill" id="barTemp"></div></div>
                     <div class="card-expand-hint">ver grafica</div>
                 </div>
             </div>
@@ -148,6 +166,8 @@
                             <th>Fondo</th>
                             <th>M.Viento</th>
                             <th>Lluvia</th>
+                            <th>Visib</th>
+                            <th>Nubes</th>
                             <th>Temp</th>
                         </tr>
                     </thead>
@@ -266,6 +286,6 @@
         <p>TiempoLuarca &middot; Datos: AEMET (Cabo Busto), Open-Meteo, IHM</p>
     </footer>
 
-    <script src="static/app.js?v=3"></script>
+    <script src="static/app.js?v=4"></script>
 </body>
 </html>
