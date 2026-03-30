@@ -685,6 +685,26 @@ h2 {
     opacity: 0.7;
 }
 
+/* ─── Collapsible sections ─────────────────────────────────────────────────── */
+.collapsible-header {
+    cursor: pointer;
+    user-select: none;
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+}
+.collapsible-header:hover { color: var(--text); }
+.collapse-icon {
+    font-size: 0.7rem;
+    transition: transform 0.3s;
+}
+.collapse-icon.open {
+    transform: rotate(180deg);
+}
+.collapsible-body {
+    animation: panelSlide 0.3s ease;
+}
+
 /* ─── Maps ────────────────────────────────────────────────────────────────── */
 .maps-tabs {
     display: flex;

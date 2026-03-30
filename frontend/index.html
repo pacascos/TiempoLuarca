@@ -10,7 +10,7 @@
         const basePath = window.location.pathname.endsWith('/') ? window.location.pathname : window.location.pathname + '/';
         window.__BASE = basePath;
     </script>
-    <link rel="stylesheet" href="static/styles.css?v=15">
+    <link rel="stylesheet" href="static/styles.css?v=16">
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/weather-icons/2.0.12/css/weather-icons.min.css">
     <link rel="preconnect" href="https://fonts.googleapis.com">
     <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800;900&display=swap" rel="stylesheet">
@@ -218,20 +218,42 @@
         </section>
 
         <!-- Mapas e imagenes -->
+        <!-- Windy -->
         <section class="maps-section">
-            <h2>Mapas</h2>
-            <div class="maps-tabs">
-                <button class="map-tab active" data-map="wind" onclick="selectMap('wind')">Viento</button>
-                <button class="map-tab" data-map="waves" onclick="selectMap('waves')">Olas</button>
-                <button class="map-tab" data-map="rain" onclick="selectMap('rain')">Lluvia</button>
-                <button class="map-tab" data-map="clouds" onclick="selectMap('clouds')">Nubes</button>
-                <button class="map-tab" data-map="satellite" onclick="selectMap('satellite')">Satelite</button>
-                <button class="map-tab" data-map="radar" onclick="selectMap('radar')">Radar</button>
+            <h2 class="collapsible-header" onclick="toggleSection('windy')">
+                Windy <span class="collapse-icon" id="windyIcon">&#9660;</span>
+            </h2>
+            <div class="collapsible-body" id="windyBody" style="display:none">
+                <div class="maps-tabs">
+                    <button class="map-tab active" data-map="wind" onclick="selectMap('wind')">Viento</button>
+                    <button class="map-tab" data-map="waves" onclick="selectMap('waves')">Olas</button>
+                    <button class="map-tab" data-map="rain" onclick="selectMap('rain')">Lluvia</button>
+                    <button class="map-tab" data-map="clouds" onclick="selectMap('clouds')">Nubes</button>
+                    <button class="map-tab" data-map="satellite" onclick="selectMap('satellite')">Satelite</button>
+                    <button class="map-tab" data-map="radar" onclick="selectMap('radar')">Radar</button>
+                </div>
+                <div class="map-container" id="mapContainer">
+                    <iframe id="windyFrame" class="map-frame" loading="lazy" src="" frameborder="0"></iframe>
+                </div>
             </div>
-            <div class="map-container" id="mapContainer">
-                <iframe id="windyFrame" class="map-frame" loading="lazy"
-                    src="https://embed.windy.com/embed.html?type=map&location=coordinates&metricRain=mm&metricTemp=%C2%B0C&metricWind=km%2Fh&zoom=8&overlay=wind&product=ecmwf&level=surface&lat=43.54&lon=-6.54&message=true"
-                    frameborder="0"></iframe>
+        </section>
+
+        <!-- Puertos del Estado -->
+        <section class="maps-section">
+            <h2 class="collapsible-header" onclick="toggleSection('portus')">
+                Puertos del Estado <span class="collapse-icon" id="portusIcon">&#9660;</span>
+            </h2>
+            <div class="collapsible-body" id="portusBody" style="display:none">
+                <div class="maps-tabs">
+                    <button class="map-tab portus-tab active" data-portus="oleaje" onclick="selectPortus('oleaje')">Oleaje</button>
+                    <button class="map-tab portus-tab" data-portus="viento" onclick="selectPortus('viento')">Viento</button>
+                    <button class="map-tab portus-tab" data-portus="temperatura" onclick="selectPortus('temperatura')">Temp. agua</button>
+                    <button class="map-tab portus-tab" data-portus="corrientes" onclick="selectPortus('corrientes')">Corrientes</button>
+                    <button class="map-tab portus-tab" data-portus="nivmar" onclick="selectPortus('nivmar')">Nivel mar</button>
+                </div>
+                <div class="map-container" id="portusContainer">
+                    <iframe id="portusFrame" class="map-frame" loading="lazy" src="" frameborder="0"></iframe>
+                </div>
             </div>
         </section>
 
@@ -314,6 +336,6 @@
         <p>TiempoLuarca &middot; Datos: AEMET (Cabo Busto), Open-Meteo, IHM</p>
     </footer>
 
-    <script src="static/app.js?v=15"></script>
+    <script src="static/app.js?v=16"></script>
 </body>
 </html>

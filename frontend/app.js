@@ -867,30 +867,77 @@ window.addEventListener('resize', () => {
     if (tidesData) drawTideChart();
 });
 
-// ─── Maps ────────────────────────────────────────────────────────────────────
+// ─── Collapsible sections ─────────────────────────────────────────────────────
+
+window.toggleSection = function(id) {
+    const body = document.getElementById(id + 'Body');
+    const icon = document.getElementById(id + 'Icon');
+    if (!body) return;
+    const isOpen = body.style.display !== 'none';
+    body.style.display = isOpen ? 'none' : 'block';
+    if (icon) icon.classList.toggle('open', !isOpen);
+
+    // Lazy-load: cargar iframe solo al abrir por primera vez
+    if (!isOpen) {
+        if (id === 'windy') {
+            const frame = document.getElementById('windyFrame');
+            if (!frame.src || frame.src === '' || frame.src === window.location.href) {
+                selectMap('wind');
+            }
+        }
+        if (id === 'portus') {
+            const frame = document.getElementById('portusFrame');
+            if (!frame.src || frame.src === '' || frame.src === window.location.href) {
+                selectPortus('oleaje');
+            }
+        }
+    }
+};
+
+// ─── Windy Maps ──────────────────────────────────────────────────────────────
 
 const WINDY_BASE = 'https://embed.windy.com/embed.html?type=map&location=coordinates&metricRain=mm&metricTemp=%C2%B0C&metricWind=km%2Fh&zoom=8&level=surface&lat=43.54&lon=-6.54&message=true';
 
 const MAP_CONFIG = {
-    wind:      { type: 'windy', overlay: 'wind', product: 'ecmwf' },
-    waves:     { type: 'windy', overlay: 'waves', product: 'ecmwf' },
-    rain:      { type: 'windy', overlay: 'rain', product: 'ecmwf' },
-    clouds:    { type: 'windy', overlay: 'clouds', product: 'ecmwf' },
-    satellite: { type: 'windy', overlay: 'satellite', product: 'ecmwf' },
-    radar:     { type: 'windy', overlay: 'radar', product: 'ecmwf' },
+    wind:      { overlay: 'wind', product: 'ecmwf' },
+    waves:     { overlay: 'waves', product: 'ecmwf' },
+    rain:      { overlay: 'rain', product: 'ecmwf' },
+    clouds:    { overlay: 'clouds', product: 'ecmwf' },
+    satellite: { overlay: 'satellite', product: 'ecmwf' },
+    radar:     { overlay: 'radar', product: 'ecmwf' },
 };
 
-let currentMap = 'wind';
-
 window.selectMap = function(mapId) {
-    currentMap = mapId;
-    document.querySelectorAll('.map-tab').forEach(b => {
+    document.querySelectorAll('.map-tab:not(.portus-tab)').forEach(b => {
         b.classList.toggle('active', b.dataset.map === mapId);
     });
-
     const config = MAP_CONFIG[mapId];
+    if (!config) return;
     const frame = document.getElementById('windyFrame');
     const newSrc = `${WINDY_BASE}&overlay=${config.overlay}&product=${config.product}`;
+    if (frame.src !== newSrc) frame.src = newSrc;
+};
+
+// ─── Portus Maps ─────────────────────────────────────────────────────────────
+
+const PORTUS_BASE = 'https://portus.puertos.es/#/predictionWidget';
+
+const PORTUS_CONFIG = {
+    oleaje:      { resourceId: 'oleaje-atl', var: 'WAVE', vec: true },
+    viento:      { resourceId: 'viento', var: 'WIND', vec: true },
+    temperatura: { resourceId: 'temperatura', var: 'WATER_TEMP', vec: false },
+    corrientes:  { resourceId: 'corriente', var: 'CURRENTS', vec: true },
+    nivmar:      { resourceId: 'nivmar', var: 'SEA_LEVEL', vec: false },
+};
+
+window.selectPortus = function(mapId) {
+    document.querySelectorAll('.portus-tab').forEach(b => {
+        b.classList.toggle('active', b.dataset.portus === mapId);
+    });
+    const config = PORTUS_CONFIG[mapId];
+    if (!config) return;
+    const frame = document.getElementById('portusFrame');
+    const newSrc = `${PORTUS_BASE}?resourceId=${config.resourceId}&var=${config.var}&zoom=8&lat=43.54&lon=-6.54&vec=${config.vec}&locale=es&theme=dark`;
     if (frame.src !== newSrc) frame.src = newSrc;
 };
 
