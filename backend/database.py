@@ -46,6 +46,38 @@ def init_db():
             fetched_at TEXT DEFAULT (datetime('now'))
         );
 
+        CREATE TABLE IF NOT EXISTS hourly_history (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            timestamp TEXT NOT NULL,
+            viento_nudos REAL,
+            racha_nudos REAL,
+            viento_dir REAL,
+            ola_altura REAL,
+            ola_periodo REAL,
+            swell_altura REAL,
+            swell_periodo REAL,
+            viento_ola_altura REAL,
+            viento_ola_periodo REAL,
+            temp_agua REAL,
+            temperatura REAL,
+            humedad REAL,
+            presion REAL,
+            prob_precipitacion REAL,
+            precipitacion REAL,
+            visibilidad REAL,
+            nubosidad REAL,
+            score INTEGER,
+            score_viento INTEGER,
+            score_oleaje INTEGER,
+            score_lluvia INTEGER,
+            score_visibilidad INTEGER,
+            score_nubosidad INTEGER,
+            score_presion INTEGER,
+            score_temperatura INTEGER,
+            created_at TEXT DEFAULT (datetime('now')),
+            UNIQUE(timestamp)
+        );
+
         CREATE TABLE IF NOT EXISTS feedback (
             id INTEGER PRIMARY KEY AUTOINCREMENT,
             date TEXT NOT NULL,
@@ -61,6 +93,7 @@ def init_db():
 
         CREATE INDEX IF NOT EXISTS idx_weather_timestamp ON weather_snapshots(timestamp);
         CREATE INDEX IF NOT EXISTS idx_forecast_date ON forecast_history(target_date);
+        CREATE INDEX IF NOT EXISTS idx_hourly_timestamp ON hourly_history(timestamp);
         CREATE INDEX IF NOT EXISTS idx_feedback_date ON feedback(date);
     """)
     conn.commit()
@@ -93,6 +126,80 @@ def save_forecast_entry(entry: dict):
             entry.get("fuente", "combined"),
         ),
     )
+    conn.commit()
+    conn.close()
+
+
+def save_hourly(entry: dict):
+    """Guarda un registro horario con todos los datos. Usa REPLACE para evitar duplicados."""
+    conn = get_db()
+    conn.execute(
+        """INSERT OR REPLACE INTO hourly_history
+           (timestamp, viento_nudos, racha_nudos, viento_dir,
+            ola_altura, ola_periodo, swell_altura, swell_periodo,
+            viento_ola_altura, viento_ola_periodo, temp_agua,
+            temperatura, humedad, presion, prob_precipitacion, precipitacion,
+            visibilidad, nubosidad, score,
+            score_viento, score_oleaje, score_lluvia, score_visibilidad,
+            score_nubosidad, score_presion, score_temperatura)
+           VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)""",
+        (
+            entry.get("timestamp"),
+            entry.get("viento_nudos"), entry.get("racha_nudos"), entry.get("viento_dir"),
+            entry.get("ola_altura"), entry.get("ola_periodo"),
+            entry.get("swell_altura"), entry.get("swell_periodo"),
+            entry.get("viento_ola_altura"), entry.get("viento_ola_periodo"),
+            entry.get("temp_agua"),
+            entry.get("temperatura"), entry.get("humedad"),
+            entry.get("presion"), entry.get("prob_precipitacion"), entry.get("precipitacion"),
+            entry.get("visibilidad"), entry.get("nubosidad"),
+            entry.get("score"),
+            entry.get("score_viento"), entry.get("score_oleaje"),
+            entry.get("score_lluvia"), entry.get("score_visibilidad"),
+            entry.get("score_nubosidad"), entry.get("score_presion"),
+            entry.get("score_temperatura"),
+        ),
+    )
+    conn.commit()
+    conn.close()
+
+
+def save_hourly_batch(entries: list):
+    """Guarda múltiples registros horarios de una vez."""
+    if not entries:
+        return
+    conn = get_db()
+    for entry in entries:
+        try:
+            conn.execute(
+                """INSERT OR REPLACE INTO hourly_history
+                   (timestamp, viento_nudos, racha_nudos, viento_dir,
+                    ola_altura, ola_periodo, swell_altura, swell_periodo,
+                    viento_ola_altura, viento_ola_periodo, temp_agua,
+                    temperatura, humedad, presion, prob_precipitacion, precipitacion,
+                    visibilidad, nubosidad, score,
+                    score_viento, score_oleaje, score_lluvia, score_visibilidad,
+                    score_nubosidad, score_presion, score_temperatura)
+                   VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)""",
+                (
+                    entry.get("timestamp"),
+                    entry.get("viento_nudos"), entry.get("racha_nudos"), entry.get("viento_dir"),
+                    entry.get("ola_altura"), entry.get("ola_periodo"),
+                    entry.get("swell_altura"), entry.get("swell_periodo"),
+                    entry.get("viento_ola_altura"), entry.get("viento_ola_periodo"),
+                    entry.get("temp_agua"),
+                    entry.get("temperatura"), entry.get("humedad"),
+                    entry.get("presion"), entry.get("prob_precipitacion"), entry.get("precipitacion"),
+                    entry.get("visibilidad"), entry.get("nubosidad"),
+                    entry.get("score"),
+                    entry.get("score_viento"), entry.get("score_oleaje"),
+                    entry.get("score_lluvia"), entry.get("score_visibilidad"),
+                    entry.get("score_nubosidad"), entry.get("score_presion"),
+                    entry.get("score_temperatura"),
+                ),
+            )
+        except Exception:
+            pass
     conn.commit()
     conn.close()
 

@@ -19,7 +19,7 @@ from backend.data_sources import (
     get_ihm_mareas, get_open_meteo_marine, get_open_meteo_forecast,
 )
 from backend.scoring import ScoringInput, calculate_score, score_forecast_hour
-from backend.database import init_db, save_snapshot, save_feedback, get_feedback_list, get_history
+from backend.database import init_db, save_snapshot, save_hourly_batch, save_feedback, get_feedback_list, get_history
 
 logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
@@ -101,11 +101,54 @@ async def _refresh_cache(force: bool = False):
     _cache["timestamp"] = datetime.now().isoformat()
     _cache_time = datetime.now()
 
-    # Guardar snapshot cada hora (no cada refresh)
-    obs_cache = _sources["observacion_busto"]
-    if obs_cache.last_fetch and (datetime.now() - obs_cache.last_fetch).seconds < 120:
-        current_score = _compute_current_score(_cache)
-        save_snapshot(_cache, current_score)
+    # Guardar histórico horario: las horas ya pasadas del forecast + marine combinadas
+    try:
+        forecast_data = _cache.get("forecast") or []
+        marine_data = _cache.get("oleaje") or []
+        marine_by_h = {m.get("timestamp", "")[:13]: m for m in marine_data}
+        now_str = datetime.now().strftime("%Y-%m-%dT%H")
+
+        # Solo guardar horas pasadas o la actual (no futuras, esas son predicción)
+        entries_to_save = []
+        for f in forecast_data:
+            ts = f.get("timestamp", "")
+            if ts[:13] > now_str:
+                break
+            m = marine_by_h.get(ts[:13], {})
+            scored = score_forecast_hour(f, m if m else None)
+            entries_to_save.append({
+                "timestamp": ts,
+                "viento_nudos": f.get("viento_nudos"),
+                "racha_nudos": f.get("viento_racha_nudos"),
+                "viento_dir": f.get("viento_dir"),
+                "ola_altura": m.get("ola_altura"),
+                "ola_periodo": m.get("ola_periodo"),
+                "swell_altura": m.get("swell_altura"),
+                "swell_periodo": m.get("swell_periodo"),
+                "viento_ola_altura": m.get("viento_ola_altura"),
+                "viento_ola_periodo": m.get("viento_ola_periodo"),
+                "temp_agua": m.get("temp_agua"),
+                "temperatura": f.get("temperatura"),
+                "humedad": f.get("humedad"),
+                "presion": f.get("presion"),
+                "prob_precipitacion": f.get("prob_precipitacion"),
+                "precipitacion": f.get("precipitacion"),
+                "visibilidad": f.get("visibilidad"),
+                "nubosidad": f.get("nubosidad"),
+                "score": scored.get("score"),
+                "score_viento": scored.get("scores", {}).get("viento"),
+                "score_oleaje": scored.get("scores", {}).get("oleaje"),
+                "score_lluvia": scored.get("scores", {}).get("lluvia"),
+                "score_visibilidad": scored.get("scores", {}).get("visibilidad"),
+                "score_nubosidad": scored.get("scores", {}).get("nubosidad"),
+                "score_presion": scored.get("scores", {}).get("presion"),
+                "score_temperatura": scored.get("scores", {}).get("temperatura"),
+            })
+        if entries_to_save:
+            save_hourly_batch(entries_to_save)
+            logger.info("Historico: %d registros horarios guardados", len(entries_to_save))
+    except Exception as e:
+        logger.error("Error guardando historico: %s", e)
 
 
 def _compute_current_score(data: dict) -> int | None:
