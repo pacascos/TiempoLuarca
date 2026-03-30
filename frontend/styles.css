@@ -198,6 +198,59 @@ h2 {
     max-width: 400px;
 }
 
+/* ─── Help ────────────────────────────────────────────────────────────────── */
+.help-btn {
+    width: 28px;
+    height: 28px;
+    border-radius: 50%;
+    border: 1px solid var(--glass-border);
+    background: var(--glass);
+    color: var(--text-dim);
+    font-size: 0.85rem;
+    font-weight: 700;
+    cursor: pointer;
+    margin-top: 0.8rem;
+    transition: all 0.2s;
+}
+.help-btn:hover { color: white; border-color: var(--accent); }
+.help-panel {
+    display: none;
+    background: var(--glass);
+    backdrop-filter: blur(12px);
+    border: 1px solid var(--glass-border);
+    border-radius: var(--radius);
+    padding: 1rem 1.2rem;
+    margin-top: 0.8rem;
+    font-size: 0.78rem;
+    color: var(--text-dim);
+    line-height: 1.6;
+    max-width: 500px;
+    margin-left: auto;
+    margin-right: auto;
+    animation: panelSlide 0.25s ease;
+}
+.help-panel.open { display: block; }
+.help-panel p { margin-bottom: 0.4rem; }
+.help-panel strong { color: var(--text); }
+.help-factors {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 0.3rem;
+    margin: 0.5rem 0;
+}
+.help-factors span {
+    background: rgba(255,255,255,0.05);
+    border-radius: 6px;
+    padding: 0.2rem 0.5rem;
+    font-size: 0.7rem;
+    font-weight: 600;
+}
+.help-periods {
+    border-top: 1px solid var(--border);
+    padding-top: 0.4rem;
+    margin-top: 0.4rem;
+}
+
 /* ─── Data Cards Grid ─────────────────────────────────────────────────────── */
 .current-grid {
     display: grid;
