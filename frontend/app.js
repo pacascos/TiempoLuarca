@@ -299,10 +299,10 @@ function renderSummary(data) {
             <div class="summary-score" style="color: ${color}">${d.score_medio}</div>
             <div class="summary-label" style="color: ${color}">${d.label_score || ''}</div>
             <div class="summary-details">
-                Viento: ${d.viento_medio != null ? knToDisplay(d.viento_medio) : '--'} ${windLabel()} (max ${d.viento_max != null ? knToDisplay(d.viento_max) : '--'})<br>
-                Olas: ${d.ola_media || '--'}m (max ${d.ola_max || '--'}m)<br>
-                Lluvia: max ${d.precip_max || 0}%<br>
-                ${d.temp_min || '--'}° / ${d.temp_max || '--'}°
+                <span style="color:${windColor(d.viento_max)}">Viento: ${d.viento_medio != null ? knToDisplay(d.viento_medio) : '--'} ${windLabel()} (max ${d.viento_max != null ? knToDisplay(d.viento_max) : '--'})</span><br>
+                <span style="color:${swellColor(d.ola_max)}">Olas: ${d.ola_media || '--'}m (max ${d.ola_max || '--'}m)</span><br>
+                <span style="color:${rainColor(d.precip_max)}">Lluvia: max ${d.precip_max || 0}%</span><br>
+                <span style="color:${tempColor(d.temp_min)}">Temp: ${d.temp_min || '--'}° / ${d.temp_max || '--'}°</span>
             </div>
             ${d.mejor_ventana ? `<div class="summary-window">Mejor ventana: ${d.mejor_ventana.inicio} - ${d.mejor_ventana.fin}</div>` : ''}
         </div>`;
