@@ -1065,8 +1065,9 @@ const CHART_CONFIG = {
     temperatura: {
         title: 'Temperatura - proximas 48h',
         series: [
-            { key: 'temperatura', label: 'Temperatura', color: '#ef4444', convert: v => v },
-            { key: 'humedad', label: 'Humedad %', color: '#06b6d4', convert: v => v, secondary: true },
+            { key: 'temperatura', label: 'Temperatura aire', color: '#ef4444', convert: v => v },
+            { key: 'temp_agua', label: 'Temperatura agua', color: '#06b6d4', convert: v => v },
+            { key: 'humedad', label: 'Humedad %', color: '#8b5cf6', convert: v => v, secondary: true },
         ],
         unitFn: () => 'C',
     },
@@ -1090,6 +1091,8 @@ window.toggleChart = function(type) {
     if (card) card.classList.add('active');
 
     drawDetailChart(type);
+    // Scroll al panel para que se vea
+    setTimeout(() => panel.scrollIntoView({ behavior: 'smooth', block: 'nearest' }), 50);
 };
 
 function drawDetailChart(type) {
