@@ -3,6 +3,20 @@
 const BASE = window.__BASE || '/';
 function apiUrl(path) { return BASE + path; }
 
+// Funciones de fecha/hora LOCAL (nunca UTC) para comparar con timestamps del forecast
+function localDateStr(d) {
+    d = d || new Date();
+    return d.getFullYear() + '-' + String(d.getMonth()+1).padStart(2,'0') + '-' + String(d.getDate()).padStart(2,'0');
+}
+function localHourStr(d) {
+    d = d || new Date();
+    return localDateStr(d) + 'T' + String(d.getHours()).padStart(2,'0');
+}
+function localNowMins() {
+    const d = new Date();
+    return d.getHours() * 60 + d.getMinutes();
+}
+
 const SCORE_COLORS = {
     10: '#00C853', 9: '#64DD17', 8: '#AEEA00', 7: '#FFD600', 6: '#FFAB00',
     5: '#FF6D00', 4: '#FF3D00', 3: '#E53935', 2: '#F44336', 1: '#EF5350'
@@ -276,7 +290,7 @@ async function loadForecast() {
         forecastData = data.forecast || [];
         renderForecastTabs();
         if (forecastData.length > 0) {
-            const today = new Date().toISOString().slice(0, 10);
+            const today = localDateStr();
             selectedDate = today;
             renderForecastDay(today);
         }
@@ -412,9 +426,7 @@ function tempColor(c) {
 
 function renderForecastTable(hours) {
     const tbody = document.getElementById('forecastBody');
-    // Hora local en formato "YYYY-MM-DDTHH" para comparar con timestamps del forecast
-    const now = new Date();
-    const nowHour = now.getFullYear() + '-' + String(now.getMonth()+1).padStart(2,'0') + '-' + String(now.getDate()).padStart(2,'0') + 'T' + String(now.getHours()).padStart(2,'0');
+    const nowHour = localHourStr();
     tbody.innerHTML = hours.map(h => {
         const score = h.score || 5;
         const color = SCORE_COLORS[score] || '#666';
@@ -845,7 +857,7 @@ window.selectMap = function(mapId) {
 
 function setupFeedbackForm() {
     // Set today's date
-    const today = new Date().toISOString().slice(0, 10);
+    const today = localDateStr();
     document.getElementById('fbDate').value = today;
 
     // Toggle buttons
