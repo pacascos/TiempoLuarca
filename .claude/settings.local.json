@@ -61,7 +61,10 @@
       "Bash(curl -s \"https://opendata.aemet.es/opendata/api/prediccion/especifica/playa/3301002?api_key=eyJhbGciOiJIUzI1NiJ9.test\")",
       "Bash(curl:*)",
       "WebFetch(domain:pypi.org)",
-      "WebFetch(domain:github.com)"
+      "WebFetch(domain:github.com)",
+      "WebFetch(domain:www.aemet.es)",
+      "WebFetch(domain:raw.githubusercontent.com)",
+      "WebFetch(domain:climalert-docs.imida.es)"
     ]
   }
 }

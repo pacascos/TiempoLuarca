@@ -15,6 +15,7 @@ from apscheduler.schedulers.asyncio import AsyncIOScheduler
 from backend.data_sources import (
     get_aemet_observacion_busto, get_aemet_prediccion_valdes,
     get_aemet_prediccion_costera, get_aemet_prediccion_playa,
+    get_aemet_alertas_costeras,
     get_ihm_mareas, get_open_meteo_marine, get_open_meteo_forecast,
 )
 from backend.scoring import ScoringInput, calculate_score, score_forecast_hour
@@ -64,6 +65,7 @@ _sources = {
     "prediccion_valdes":  SourceCache("AEMET Valdés",    get_aemet_prediccion_valdes, ttl_minutes=120),
     "prediccion_costera": SourceCache("AEMET Costera",   get_aemet_prediccion_costera, ttl_minutes=180),
     "prediccion_playa":   SourceCache("AEMET Playa",     get_aemet_prediccion_playa, ttl_minutes=180),
+    "alertas_costeras":   SourceCache("AEMET Alertas",   get_aemet_alertas_costeras, ttl_minutes=30),
     "mareas":             SourceCache("IHM Mareas",      lambda: get_ihm_mareas(days=8), ttl_minutes=720),
     "oleaje":             SourceCache("Open-Meteo Marine", get_open_meteo_marine, ttl_minutes=60),
     "forecast":           SourceCache("Open-Meteo Forecast", get_open_meteo_forecast, ttl_minutes=60),
@@ -362,6 +364,7 @@ async def api_current():
             "prob_precipitacion": current_forecast.get("prob_precipitacion") if current_forecast else None,
         } if current_forecast else None,
         "presion_trend": presion_trend,
+        "alertas": _cache.get("alertas_costeras") or [],
         "score": score_data,
         "playa": (_cache.get("prediccion_playa") or [None])[0] if _cache.get("prediccion_playa") else None,
         "costera": _cache.get("prediccion_costera"),

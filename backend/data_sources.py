@@ -267,6 +267,136 @@ async def get_ihm_mareas(days: int = 3) -> dict | None:
     }
 
 
+# ─── AEMET: Alertas/Avisos costeros ───────────────────────────────────────────
+
+async def get_aemet_alertas_costeras() -> list | None:
+    """Obtiene avisos meteorológicos para Asturias (area 63), filtra costeros.
+    AEMET devuelve CAP XML en tar.gz. Parseamos los avisos relevantes.
+    Zonas costeras Asturias: 633301C (occidental), 633302C (oriental).
+    """
+    import tarfile
+    import io
+    import xml.etree.ElementTree as ET
+
+    try:
+        async with httpx.AsyncClient(timeout=TIMEOUT) as client:
+            # Paso 1: obtener URL de datos
+            r = await client.get(
+                f"{AEMET_BASE_URL}/avisos_cap/ultimoelaborado/area/63",
+                headers=AEMET_HEADERS,
+            )
+            r.raise_for_status()
+            body = r.json()
+            if "datos" not in body:
+                logger.warning("AEMET alertas sin 'datos': %s", body)
+                return []
+
+            # Paso 2: descargar tar.gz
+            r2 = await client.get(body["datos"])
+            r2.raise_for_status()
+
+        # Parsear tar (puede ser tar o tar.gz)
+        alertas = []
+        for mode in ("r:gz", "r"):
+            try:
+                tar = tarfile.open(fileobj=io.BytesIO(r2.content), mode=mode)
+                for member in tar.getmembers():
+                    if member.name.endswith(".xml"):
+                        f = tar.extractfile(member)
+                        if f:
+                            alertas.extend(_parse_cap_xml(f.read()))
+                tar.close()
+                break
+            except Exception:
+                continue
+        else:
+            # Ni tar.gz ni tar, intentar como XML directo
+            try:
+                alertas = _parse_cap_xml(r2.content)
+            except Exception:
+                logger.warning("AEMET alertas: formato no reconocido")
+                return []
+
+        # Filtrar solo alertas costeras de Asturias occidental (Luarca)
+        costeras = [a for a in alertas if a.get("es_costera") and a.get("nivel") != "verde"]
+        logger.info("AEMET alertas costeras activas: %d", len(costeras))
+        return costeras
+
+    except Exception as e:
+        logger.error("Error AEMET alertas: %s", e)
+        return []
+
+
+def _parse_cap_xml(xml_bytes: bytes) -> list:
+    """Parsea un XML CAP de AEMET y extrae alertas."""
+    ns = {"cap": "urn:oasis:names:tc:emergency:cap:1.2"}
+    alertas = []
+    try:
+        root = ET.fromstring(xml_bytes)
+    except Exception:
+        return []
+
+    # Puede ser un <alert> directo o un contenedor
+    alerts = root.findall(".//cap:alert", ns) if root.tag != "{urn:oasis:names:tc:emergency:cap:1.2}alert" else [root]
+    if not alerts and root.tag.endswith("alert"):
+        alerts = [root]
+
+    for alert in alerts:
+        for info in alert.findall("cap:info", ns):
+            evento = ""
+            nivel = "verde"
+            fenomeno = ""
+            es_costera = False
+            zona = ""
+            descripcion = info.findtext("cap:description", "", ns)
+            headline = info.findtext("cap:headline", "", ns)
+            severity = info.findtext("cap:severity", "", ns)
+            onset = info.findtext("cap:onset", "", ns)  # inicio
+            expires = info.findtext("cap:expires", "", ns)  # fin
+
+            # Leer parámetros
+            for param in info.findall("cap:parameter", ns):
+                name = param.findtext("cap:valueName", "", ns)
+                val = param.findtext("cap:value", "", ns)
+                if "nivel" in name.lower():
+                    nivel = val.lower()  # amarillo, naranja, rojo, verde
+                if "fenomeno" in name.lower() or "parametro" in name.lower():
+                    fenomeno = val
+
+            # Leer event codes
+            for ec in info.findall("cap:eventCode", ns):
+                name = ec.findtext("cap:valueName", "", ns)
+                val = ec.findtext("cap:value", "", ns)
+                if val and "CO" in val:
+                    es_costera = True
+                if val:
+                    evento = val
+
+            # Leer áreas
+            for area in info.findall("cap:area", ns):
+                area_desc = area.findtext("cap:areaDesc", "", ns)
+                for gc in area.findall("cap:geocode", ns):
+                    val = gc.findtext("cap:value", "", ns)
+                    if val and val.startswith("6333"):
+                        es_costera = True
+                        zona = area_desc
+
+            if es_costera or "cost" in fenomeno.lower() or "cost" in headline.lower():
+                alertas.append({
+                    "nivel": nivel,
+                    "severity": severity,
+                    "headline": headline,
+                    "descripcion": descripcion[:300] if descripcion else "",
+                    "fenomeno": fenomeno,
+                    "zona": zona or "Costa asturiana",
+                    "inicio": onset,
+                    "fin": expires,
+                    "es_costera": True,
+                })
+
+    return alertas
+
+
 # ─── Open-Meteo: Oleaje ──────────────────────────────────────────────────────
 
 async def get_open_meteo_marine() -> list | None:

@@ -83,6 +83,7 @@ async function loadCurrent() {
     try {
         const res = await fetch(apiUrl('api/current'));
         const data = await res.json();
+        renderAlerts(data.alertas || []);
         renderCurrent(data);
     } catch (e) {
         console.error('Error loading current:', e);
@@ -226,6 +227,28 @@ function renderCurrent(data) {
         document.getElementById('valPeriodo').textContent = extra;
     }
 
+}
+
+function renderAlerts(alertas) {
+    const container = document.getElementById('alertsContainer');
+    if (!alertas || alertas.length === 0) {
+        container.innerHTML = '';
+        return;
+    }
+    const levelLabels = { rojo: 'Alerta roja', naranja: 'Alerta naranja', amarillo: 'Aviso amarillo' };
+    const levelIcons = { rojo: 'wi-hurricane', naranja: 'wi-storm-warning', amarillo: 'wi-small-craft-advisory' };
+    container.innerHTML = alertas.map(a => {
+        const nivel = a.nivel || 'amarillo';
+        return `<div class="alert-banner ${nivel}">
+            <div class="alert-icon"><i class="wi ${levelIcons[nivel] || 'wi-storm-warning'}"></i></div>
+            <div class="alert-content">
+                <div class="alert-level">${levelLabels[nivel] || 'Aviso'} - ${a.zona || 'Costa asturiana'}</div>
+                <div class="alert-headline">${a.headline || a.fenomeno || 'Aviso costero activo'}</div>
+                ${a.descripcion ? `<div class="alert-detail">${a.descripcion}</div>` : ''}
+                ${a.inicio ? `<div class="alert-detail">Desde: ${a.inicio.replace('T',' ').slice(0,16)} ${a.fin ? '· Hasta: ' + a.fin.replace('T',' ').slice(0,16) : ''}</div>` : ''}
+            </div>
+        </div>`;
+    }).join('');
 }
 
 function setScoreBar(id, score) {
