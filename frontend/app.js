@@ -1073,9 +1073,11 @@ const CHART_CONFIG = {
     oleaje: {
         title: 'Oleaje - proximas 48h',
         series: [
-            { key: 'swell_altura', label: 'Mar de fondo', color: '#06b6d4', convert: v => v },
-            { key: 'viento_ola_altura', label: 'Mar de viento', color: '#f97316', convert: v => v },
-            { key: 'ola_altura', label: 'Ola total', color: '#8b5cf6', convert: v => v, dashed: true },
+            { key: 'swell_altura', label: 'Mar de fondo (m)', color: '#06b6d4', convert: v => v },
+            { key: 'viento_ola_altura', label: 'Mar de viento (m)', color: '#f97316', convert: v => v },
+            { key: 'ola_altura', label: 'Ola total (m)', color: '#8b5cf6', convert: v => v, dashed: true },
+            { key: 'swell_periodo', label: 'Periodo fondo (s)', color: '#00C853', convert: v => v, secondary: true },
+            { key: 'viento_ola_periodo', label: 'Periodo viento (s)', color: '#FFD600', convert: v => v, secondary: true },
         ],
         unitFn: () => 'm',
     },
