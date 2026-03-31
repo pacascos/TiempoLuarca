@@ -557,7 +557,7 @@ async def api_summary():
     def summarize_day(date_str: str) -> dict:
         day_hours = [f for f in forecast if f.get("timestamp", "").startswith(date_str)]
         # Solo horas de luz (7-21)
-        daylight = [f for f in day_hours if 7 <= int(f.get("timestamp", "T00")[11:13]) <= 20]
+        daylight = [f for f in day_hours if 8 <= int(f.get("timestamp", "T00")[11:13]) <= 20]
         if not daylight:
             daylight = day_hours
 
