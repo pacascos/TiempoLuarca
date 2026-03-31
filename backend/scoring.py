@@ -153,8 +153,10 @@ def _score_swell(altura_m: float, periodo_s: float | None) -> int:
         base = 2
     else:
         base = 1
+    # Periodo largo solo mejora si el swell es moderado (< 2m)
+    # Con 2m+ el periodo no compensa la altura para un barco de 6.5m
     if periodo_s is not None:
-        if periodo_s > 12:
+        if periodo_s > 12 and altura_m < 2.0:
             base = min(10, base + 1)
         elif periodo_s < 7:
             base = max(1, base - 1)
@@ -411,8 +413,10 @@ def calculate_score(inp: ScoringInput) -> ScoringResult:
         score = min(score, 4)
     if min(sv, so) <= 3:
         score = min(score, 5)
-    if so <= 4:
-        score = min(score, 6)
+    if so <= 3:
+        score = min(score, 5)
+    elif so <= 4:
+        score = min(score, 5)
     if sr <= 3:
         score = min(score, 5)
     if svis <= 2:
