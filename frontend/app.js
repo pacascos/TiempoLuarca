@@ -243,70 +243,64 @@ function renderWindBarb(speedKn, dirDeg) {
         return;
     }
 
+    // Barba meteorologica estandar:
+    // - Circulo en el centro (estacion)
+    // - Palo sale del centro HACIA de donde viene el viento
+    // - Barbas en el extremo lejano indican fuerza
+    // - Sin punta de flecha
+    //
+    // Coordenadas: palo hacia y NEGATIVO (arriba en SVG)
+    // rotate(0) → palo arriba → viento del NORTE
+    // rotate(90) → palo a la derecha → viento del ESTE
+
     const cx = 30, cy = 30;
-    const staffLen = 22;
+    const staffLen = 20;
     const barbLen = 10;
     const shortBarbLen = 6;
     const barbSpacing = 4;
     const pennantWidth = 4;
 
-    // Descomponer velocidad en banderines (50kn), barras largas (10kn) y cortas (5kn)
-    let remaining = Math.round(speedKn / 5) * 5; // Redondear a 5
+    let remaining = Math.round(speedKn / 5) * 5;
     const pennants = Math.floor(remaining / 50);
     remaining -= pennants * 50;
     const longBarbs = Math.floor(remaining / 10);
     remaining -= longBarbs * 10;
     const shortBarbs = Math.floor(remaining / 5);
 
-    // Construir barbas en coordenadas locales (palo vertical, barbas a la derecha)
-    // El palo va de (0,0) arriba a (0, staffLen) abajo. Barbas en la parte superior.
     let elements = '';
     const strokeColor = speedKn <= 10 ? '#00C853' : speedKn <= 20 ? '#FFD600' : speedKn <= 30 ? '#FF6D00' : '#F44336';
 
-    // Dibujar centrado: y negativo = arriba (de donde viene), y positivo = abajo (hacia donde va)
-    // Barbas en y negativo (arriba), flecha en y positivo (abajo)
-    const half = staffLen / 2;
-
-    // Palo centrado
-    elements += `<line x1="0" y1="${-half}" x2="0" y2="${half}" stroke="${strokeColor}" stroke-width="2" stroke-linecap="round"/>`;
-    // Punta de flecha grande abajo (hacia donde sopla) - MUY visible
-    elements += `<polygon points="-5,${half - 7} 5,${half - 7} 0,${half}" fill="${strokeColor}"/>`;
-
-    // Circulo si calma (<3 nudos)
+    // Calma
     if (speedKn < 3) {
-        elements = `<circle cx="0" cy="0" r="6" fill="none" stroke="${strokeColor}" stroke-width="1.5"/>`;
+        elements = `<circle cx="0" cy="0" r="6" fill="none" stroke="${strokeColor}" stroke-width="2"/>`;
         svg.innerHTML = `<g transform="translate(${cx},${cy})">${elements}</g>`;
         return;
     }
 
-    let pos = -half; // Empezar desde arriba (de donde viene el viento)
+    // Circulo estacion en el centro
+    elements += `<circle cx="0" cy="0" r="2.5" fill="${strokeColor}" opacity="0.4"/>`;
 
-    // Punto grueso en el extremo de donde viene (para que se vea cual es "arriba")
-    elements += `<circle cx="0" cy="${-half}" r="2" fill="${strokeColor}"/>`;
+    // Palo desde centro hacia arriba (y negativo)
+    elements += `<line x1="0" y1="0" x2="0" y2="${-staffLen}" stroke="${strokeColor}" stroke-width="2" stroke-linecap="round"/>`;
 
-    // Banderines (triángulos = 50 nudos)
+    // Barbas en el extremo lejano (y = -staffLen)
+    let pos = -staffLen;
+
     for (let i = 0; i < pennants; i++) {
-        elements += `<polygon points="0,${pos} ${barbLen},${pos + pennantWidth/2} 0,${pos + pennantWidth}" fill="${strokeColor}" stroke="none"/>`;
+        elements += `<polygon points="0,${pos} ${barbLen},${pos + pennantWidth/2} 0,${pos + pennantWidth}" fill="${strokeColor}"/>`;
         pos += pennantWidth + 2;
     }
-
-    // Barras largas (10 nudos)
     for (let i = 0; i < longBarbs; i++) {
         elements += `<line x1="0" y1="${pos}" x2="${barbLen}" y2="${pos - 3}" stroke="${strokeColor}" stroke-width="2" stroke-linecap="round"/>`;
         pos += barbSpacing;
     }
-
-    // Barras cortas (5 nudos)
     for (let i = 0; i < shortBarbs; i++) {
-        if (pennants === 0 && longBarbs === 0 && i === 0) pos = -half + barbSpacing;
+        if (pennants === 0 && longBarbs === 0 && i === 0) pos = -staffLen + barbSpacing;
         elements += `<line x1="0" y1="${pos}" x2="${shortBarbLen}" y2="${pos - 2}" stroke="${strokeColor}" stroke-width="2" stroke-linecap="round"/>`;
         pos += barbSpacing;
     }
 
-    // Rotar: 0° = barbas arriba (N), flecha abajo (S) = viento del Norte
-    const rotation = dirDeg;
-
-    svg.innerHTML = `<g transform="translate(${cx},${cy}) rotate(${rotation})">${elements}</g>`;
+    svg.innerHTML = `<g transform="translate(${cx},${cy}) rotate(${dirDeg})">${elements}</g>`;
 
 }
 

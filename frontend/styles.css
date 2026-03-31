@@ -161,7 +161,7 @@ h2 {
     width: 200px;
     height: 200px;
 }
-.score-ring svg {
+.score-ring > svg {
     width: 100%;
     height: 100%;
     transform: rotate(-90deg);
