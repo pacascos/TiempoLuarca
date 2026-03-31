@@ -64,7 +64,10 @@
       "WebFetch(domain:github.com)",
       "WebFetch(domain:www.aemet.es)",
       "WebFetch(domain:raw.githubusercontent.com)",
-      "WebFetch(domain:climalert-docs.imida.es)"
+      "WebFetch(domain:climalert-docs.imida.es)",
+      "Bash(xargs cat:*)",
+      "Bash(grep -r \"TODO\\\\|FIXME\\\\|BUG\\\\|HACK\" /Users/cascos/code/TiempoLuarca --include=*.py --include=*.js)",
+      "Bash(grep -n \"except\" /Users/cascos/code/TiempoLuarca/backend/*.py)"
     ]
   }
 }

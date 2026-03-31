@@ -498,7 +498,7 @@ function renderForecastTable(hours) {
         return `<tr class="${isNow ? 'current-hour' : ''}">
             <td><strong>${time}</strong>${isNow ? ' <small>AHORA</small>' : ''}</td>
             <td><span class="score-badge" style="background: ${color}">${score}</span></td>
-            <td style="color:${wc}">${formatNum(knToDisplay(h.viento_nudos))} ${windLabel()} ${windDir ? `<span class="wind-arrow" style="transform: rotate(${windDir}deg)">&#8593;</span>` : ''}</td>
+            <td style="color:${wc}">${formatNum(knToDisplay(h.viento_nudos))} ${windLabel()} ${windDir ? `<span class="wind-arrow" style="transform: rotate(${windDir + 180}deg)">&#8593;</span>` : ''}</td>
             <td style="color:${rc}">${formatNum(knToDisplay(h.viento_racha_nudos))} ${windLabel()}</td>
             <td style="color:${swellClr}">${swellTxt}</td>
             <td style="color:${cc}">${chopTxt}</td>
