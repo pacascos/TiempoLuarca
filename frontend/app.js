@@ -236,12 +236,10 @@ function renderCurrent(data) {
 
 function renderWindBarb(speedKn, dirDeg) {
     const svg = document.getElementById('windBarbSvg');
-    const label = document.getElementById('windBarbLabel');
     if (!svg) return;
 
     if (speedKn == null || dirDeg == null) {
         svg.innerHTML = '';
-        if (label) label.textContent = '';
         return;
     }
 
@@ -306,18 +304,6 @@ function renderWindBarb(speedKn, dirDeg) {
 
     svg.innerHTML = `<g transform="translate(${cx},${cy}) rotate(${rotation})">${elements}</g>`;
 
-    // Label: actual + predominante del dia
-    if (label) {
-        const display = windUnit === 'kmh' ? Math.round(speedKn * 1.852) + ' km/h' : Math.round(speedKn) + ' kn';
-        let dayTxt = '';
-        const today = summaryData?.days?.[0];
-        if (today && today.viento_medio != null) {
-            const avgVal = windUnit === 'kmh' ? Math.round(today.viento_medio * 1.852) : Math.round(today.viento_medio);
-            const dirTxt = today.viento_dir_predominante != null ? windDirLabel(today.viento_dir_predominante) : '';
-            dayTxt = `<br><span style="font-size:0.6rem;opacity:0.6">Hoy: ${avgVal} ${windLabel()} ${dirTxt}</span>`;
-        }
-        label.innerHTML = `${display} ${windDirLabel(dirDeg)}${dayTxt}`;
-    }
 }
 
 function renderAlerts(alertas) {
