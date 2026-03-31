@@ -306,10 +306,15 @@ function renderWindBarb(speedKn, dirDeg) {
 
     svg.innerHTML = `<g transform="translate(${cx},${cy}) rotate(${rotation})">${elements}</g>`;
 
-    // Label
+    // Label con max del dia
     if (label) {
         const display = windUnit === 'kmh' ? Math.round(speedKn * 1.852) + ' km/h' : Math.round(speedKn) + ' kn';
-        label.innerHTML = `${display}<br>${windDirLabel(dirDeg)}`;
+        let maxTxt = '';
+        if (summaryData && summaryData.days && summaryData.days[0] && summaryData.days[0].racha_max != null) {
+            const maxVal = windUnit === 'kmh' ? Math.round(summaryData.days[0].racha_max * 1.852) : Math.round(summaryData.days[0].racha_max);
+            maxTxt = `<br><span style="font-size:0.6rem;opacity:0.6">Max hoy: ${maxVal} ${windLabel()}</span>`;
+        }
+        label.innerHTML = `${display} ${windDirLabel(dirDeg)}${maxTxt}`;
     }
 }
 
