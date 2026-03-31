@@ -988,13 +988,24 @@ function renderMoon() {
     ];
     const current = phases.find(p => phase < p.max);
 
-    // Próximas fases principales
-    function nextPhaseDate(targetPhase) {
-        let d = (targetPhase - phase) * cycle;
+    // Próximas fases principales, ordenadas por fecha
+    const mainPhases = [
+        { target: 0, emoji: '🌑', label: 'Nueva' },
+        { target: 0.25, emoji: '🌓', label: 'C. creciente' },
+        { target: 0.5, emoji: '🌕', label: 'Llena' },
+        { target: 0.75, emoji: '🌗', label: 'C. menguante' },
+    ];
+    const upcoming = mainPhases.map(p => {
+        let d = (p.target - phase) * cycle;
         if (d <= 0) d += cycle;
         const date = new Date(now.getTime() + d * 86400000);
-        return date.getDate() + ' ' + ['Ene','Feb','Mar','Abr','May','Jun','Jul','Ago','Sep','Oct','Nov','Dic'][date.getMonth()];
-    }
+        const dateStr = date.getDate() + ' ' + ['Ene','Feb','Mar','Abr','May','Jun','Jul','Ago','Sep','Oct','Nov','Dic'][date.getMonth()];
+        return { ...p, days: d, dateStr };
+    }).sort((a, b) => a.days - b.days);
+
+    const upcomingHtml = upcoming.map(p =>
+        `<div class="moon-upcoming-item"><span class="moon-emoji">${p.emoji}</span>${p.dateStr}</div>`
+    ).join('');
 
     // Dibujar luna en canvas
     const canvasId = 'moonCanvas';
@@ -1005,12 +1016,7 @@ function renderMoon() {
         <div class="moon-info">
             <div class="moon-phase-name">${current.emoji} ${current.name}</div>
             <div class="moon-detail">Iluminacion: ${illum}%</div>
-            <div class="moon-upcoming">
-                <div class="moon-upcoming-item"><span class="moon-emoji">🌑</span>${nextPhaseDate(0)}</div>
-                <div class="moon-upcoming-item"><span class="moon-emoji">🌓</span>${nextPhaseDate(0.25)}</div>
-                <div class="moon-upcoming-item"><span class="moon-emoji">🌕</span>${nextPhaseDate(0.5)}</div>
-                <div class="moon-upcoming-item"><span class="moon-emoji">🌗</span>${nextPhaseDate(0.75)}</div>
-            </div>
+            <div class="moon-upcoming">${upcomingHtml}</div>
         </div>
     `;
 
@@ -1024,33 +1030,43 @@ function renderMoon() {
     ctx.scale(dpr, dpr);
     const cx = 60, cy = 60, r = 40;
 
-    // Disco lunar (gris claro)
-    ctx.beginPath();
-    ctx.arc(cx, cy, r, 0, Math.PI * 2);
-    ctx.fillStyle = '#e8e4d4';
-    ctx.fill();
+    // Dibujar luna pixel a pixel con sombra correcta
+    // phase 0=nueva (oscura), 0.25=cuarto creciente (mitad derecha iluminada)
+    // 0.5=llena (toda iluminada), 0.75=cuarto menguante (mitad izquierda iluminada)
+    const imgData = ctx.createImageData(r * 2 + 2, r * 2 + 2);
+    const lightR = 232, lightG = 228, lightB = 212;
+    const darkR = 26, darkG = 26, darkB = 46;
 
-    // Sombra: depende de la fase
-    // phase 0=nueva (todo sombra), 0.5=llena (sin sombra)
-    ctx.beginPath();
-    if (phase <= 0.5) {
-        // Creciente: sombra desde la izquierda
-        const shadowX = Math.cos(phase * 2 * Math.PI) * r;
-        ctx.arc(cx, cy, r, -Math.PI/2, Math.PI/2, false); // mitad derecha
-        ctx.ellipse(cx, cy, Math.abs(shadowX), r, 0, Math.PI/2, -Math.PI/2, shadowX > 0);
-    } else {
-        // Menguante: sombra desde la derecha
-        const shadowX = Math.cos(phase * 2 * Math.PI) * r;
-        ctx.arc(cx, cy, r, Math.PI/2, -Math.PI/2, false); // mitad izquierda
-        ctx.ellipse(cx, cy, Math.abs(shadowX), r, 0, -Math.PI/2, Math.PI/2, shadowX < 0);
+    for (let py = -r; py <= r; py++) {
+        for (let px = -r; px <= r; px++) {
+            if (px * px + py * py > r * r) continue;
+            // Determinar si este pixel está iluminado
+            // El terminador (linea luz/sombra) es una elipse vertical
+            // cuyo semieje X depende de la fase
+            const terminatorX = Math.cos(phase * 2 * Math.PI) * r;
+            let lit;
+            if (phase <= 0.5) {
+                // Creciente: derecha iluminada, sombra se reduce desde la izquierda
+                // pixel iluminado si px > terminatorX (o en la mitad de la elipse)
+                lit = px >= terminatorX;
+            } else {
+                // Menguante: izquierda iluminada, sombra crece desde la derecha
+                lit = px <= -terminatorX;
+            }
+
+            const idx = ((py + r) * (r * 2 + 2) + (px + r)) * 4;
+            imgData.data[idx] = lit ? lightR : darkR;
+            imgData.data[idx + 1] = lit ? lightG : darkG;
+            imgData.data[idx + 2] = lit ? lightB : darkB;
+            imgData.data[idx + 3] = 255;
+        }
     }
-    ctx.fillStyle = '#1a1a2e';
-    ctx.fill();
+    ctx.putImageData(imgData, (cx - r) * dpr, (cy - r) * dpr);
 
-    // Borde sutil
+    // Borde circular suave
     ctx.beginPath();
     ctx.arc(cx, cy, r, 0, Math.PI * 2);
-    ctx.strokeStyle = 'rgba(255,255,255,0.1)';
+    ctx.strokeStyle = 'rgba(255,255,255,0.15)';
     ctx.lineWidth = 1;
     ctx.stroke();
 }
