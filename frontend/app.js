@@ -1007,68 +1007,16 @@ function renderMoon() {
         `<div class="moon-upcoming-item"><span class="moon-emoji">${p.emoji}</span>${p.dateStr}</div>`
     ).join('');
 
-    // Dibujar luna en canvas
-    const canvasId = 'moonCanvas';
     container.innerHTML = `
-        <div class="moon-visual">
-            <canvas id="${canvasId}" width="120" height="120"></canvas>
-        </div>
+        <div class="moon-emoji-big">${current.emoji}</div>
         <div class="moon-info">
-            <div class="moon-phase-name">${current.emoji} ${current.name}</div>
+            <div class="moon-phase-name">${current.name}</div>
             <div class="moon-detail">Iluminacion: ${illum}%</div>
             <div class="moon-upcoming">${upcomingHtml}</div>
         </div>
     `;
 
     // Dibujar la luna gráficamente
-    const canvas = document.getElementById(canvasId);
-    if (!canvas) return;
-    const ctx = canvas.getContext('2d');
-    const dpr = window.devicePixelRatio || 1;
-    canvas.width = 120 * dpr;
-    canvas.height = 120 * dpr;
-    ctx.scale(dpr, dpr);
-    const cx = 60, cy = 60, r = 40;
-
-    // Dibujar luna pixel a pixel con sombra correcta
-    // phase 0=nueva (oscura), 0.25=cuarto creciente (mitad derecha iluminada)
-    // 0.5=llena (toda iluminada), 0.75=cuarto menguante (mitad izquierda iluminada)
-    const imgData = ctx.createImageData(r * 2 + 2, r * 2 + 2);
-    const lightR = 232, lightG = 228, lightB = 212;
-    const darkR = 26, darkG = 26, darkB = 46;
-
-    for (let py = -r; py <= r; py++) {
-        for (let px = -r; px <= r; px++) {
-            if (px * px + py * py > r * r) continue;
-            // Determinar si este pixel está iluminado
-            // El terminador (linea luz/sombra) es una elipse vertical
-            // cuyo semieje X depende de la fase
-            const terminatorX = Math.cos(phase * 2 * Math.PI) * r;
-            let lit;
-            if (phase <= 0.5) {
-                // Creciente: derecha iluminada, sombra se reduce desde la izquierda
-                // pixel iluminado si px > terminatorX (o en la mitad de la elipse)
-                lit = px >= terminatorX;
-            } else {
-                // Menguante: izquierda iluminada, sombra crece desde la derecha
-                lit = px <= -terminatorX;
-            }
-
-            const idx = ((py + r) * (r * 2 + 2) + (px + r)) * 4;
-            imgData.data[idx] = lit ? lightR : darkR;
-            imgData.data[idx + 1] = lit ? lightG : darkG;
-            imgData.data[idx + 2] = lit ? lightB : darkB;
-            imgData.data[idx + 3] = 255;
-        }
-    }
-    ctx.putImageData(imgData, (cx - r) * dpr, (cy - r) * dpr);
-
-    // Borde circular suave
-    ctx.beginPath();
-    ctx.arc(cx, cy, r, 0, Math.PI * 2);
-    ctx.strokeStyle = 'rgba(255,255,255,0.15)';
-    ctx.lineWidth = 1;
-    ctx.stroke();
 }
 
 // Renderizar luna al cargar
