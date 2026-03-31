@@ -267,11 +267,10 @@ function renderWindBarb(speedKn, dirDeg) {
     elements += `<line x1="0" y1="0" x2="0" y2="${staffLen}" stroke="${strokeColor}" stroke-width="2" stroke-linecap="round"/>`;
     elements += `<polygon points="-3,${staffLen - 5} 3,${staffLen - 5} 0,${staffLen}" fill="${strokeColor}"/>`;
 
-    // Circulo en la base si calma (<3 nudos)
+    // Circulo si calma (<3 nudos)
     if (speedKn < 3) {
-        elements += `<circle cx="0" cy="${staffLen}" r="5" fill="none" stroke="${strokeColor}" stroke-width="1.5"/>`;
+        elements += `<circle cx="0" cy="0" r="6" fill="none" stroke="${strokeColor}" stroke-width="1.5"/>`;
         svg.innerHTML = `<g transform="translate(${cx},${cy})">${elements}</g>`;
-        if (label) label.innerHTML = `${Math.round(speedKn)} kn<br>${windDirLabel(dirDeg)}`;
         return;
     }
 
