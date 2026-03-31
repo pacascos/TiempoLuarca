@@ -265,8 +265,9 @@ function renderWindBarb(speedKn, dirDeg) {
     let elements = '';
     const strokeColor = speedKn <= 10 ? '#00C853' : speedKn <= 20 ? '#FFD600' : speedKn <= 30 ? '#FF6D00' : '#F44336';
 
-    // Palo principal
+    // Palo principal con punta de flecha en la base (hacia donde sopla)
     elements += `<line x1="0" y1="0" x2="0" y2="${staffLen}" stroke="${strokeColor}" stroke-width="2" stroke-linecap="round"/>`;
+    elements += `<polygon points="-4,${staffLen - 6} 4,${staffLen - 6} 0,${staffLen}" fill="${strokeColor}"/>`;
 
     // Circulo en la base si calma (<3 nudos)
     if (speedKn < 3) {
