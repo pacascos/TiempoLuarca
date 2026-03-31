@@ -137,8 +137,13 @@ function renderCurrent(data) {
         setScoreBar('barOleaje', score.scores.oleaje);
     }
 
-    // Observation data
+    // Wind barb en el score principal
     const obs = data.observacion;
+    if (obs) {
+        renderWindBarb(obs.viento_vel_nudos, obs.viento_dir);
+    }
+
+    // Observation data
     if (obs) {
         document.getElementById('valViento').textContent =
             obs.viento_vel_nudos != null ? knToDisplay(obs.viento_vel_nudos) : '--';
@@ -227,6 +232,84 @@ function renderCurrent(data) {
         document.getElementById('valPeriodo').textContent = extra;
     }
 
+}
+
+function renderWindBarb(speedKn, dirDeg) {
+    const svg = document.getElementById('windBarbSvg');
+    const label = document.getElementById('windBarbLabel');
+    if (!svg) return;
+
+    if (speedKn == null || dirDeg == null) {
+        svg.innerHTML = '';
+        if (label) label.textContent = '';
+        return;
+    }
+
+    const cx = 40, cy = 40;
+    const staffLen = 30;
+    const barbLen = 12;
+    const shortBarbLen = 7;
+    const barbSpacing = 5;
+    const pennantWidth = 5;
+
+    // Descomponer velocidad en banderines (50kn), barras largas (10kn) y cortas (5kn)
+    let remaining = Math.round(speedKn / 5) * 5; // Redondear a 5
+    const pennants = Math.floor(remaining / 50);
+    remaining -= pennants * 50;
+    const longBarbs = Math.floor(remaining / 10);
+    remaining -= longBarbs * 10;
+    const shortBarbs = Math.floor(remaining / 5);
+
+    // Construir barbas en coordenadas locales (palo vertical, barbas a la derecha)
+    // El palo va de (0,0) arriba a (0, staffLen) abajo. Barbas en la parte superior.
+    let elements = '';
+    const strokeColor = speedKn <= 10 ? '#00C853' : speedKn <= 20 ? '#FFD600' : speedKn <= 30 ? '#FF6D00' : '#F44336';
+
+    // Palo principal
+    elements += `<line x1="0" y1="0" x2="0" y2="${staffLen}" stroke="${strokeColor}" stroke-width="2" stroke-linecap="round"/>`;
+
+    // Circulo en la base si calma (<3 nudos)
+    if (speedKn < 3) {
+        elements += `<circle cx="0" cy="${staffLen}" r="5" fill="none" stroke="${strokeColor}" stroke-width="1.5"/>`;
+        svg.innerHTML = `<g transform="translate(${cx},${cy})">${elements}</g>`;
+        if (label) label.innerHTML = `${Math.round(speedKn)} kn<br>${windDirLabel(dirDeg)}`;
+        return;
+    }
+
+    let pos = 0; // Posición desde la punta del palo
+
+    // Banderines (triángulos = 50 nudos)
+    for (let i = 0; i < pennants; i++) {
+        elements += `<polygon points="0,${pos} ${barbLen},${pos + pennantWidth/2} 0,${pos + pennantWidth}" fill="${strokeColor}" stroke="none"/>`;
+        pos += pennantWidth + 2;
+    }
+
+    // Barras largas (10 nudos)
+    for (let i = 0; i < longBarbs; i++) {
+        elements += `<line x1="0" y1="${pos}" x2="${barbLen}" y2="${pos - 3}" stroke="${strokeColor}" stroke-width="2" stroke-linecap="round"/>`;
+        pos += barbSpacing;
+    }
+
+    // Barras cortas (5 nudos)
+    for (let i = 0; i < shortBarbs; i++) {
+        // Si es la única barba, dejarla un poco separada de la punta
+        if (pennants === 0 && longBarbs === 0 && i === 0) pos = barbSpacing;
+        elements += `<line x1="0" y1="${pos}" x2="${shortBarbLen}" y2="${pos - 2}" stroke="${strokeColor}" stroke-width="2" stroke-linecap="round"/>`;
+        pos += barbSpacing;
+    }
+
+    // Rotar según dirección del viento (de donde viene)
+    // dirDeg=0 → del Norte → palo apunta hacia abajo (180°)
+    // En SVG: rotate(dirDeg+180) centra en cx,cy
+    const rotation = dirDeg + 180;
+
+    svg.innerHTML = `<g transform="translate(${cx},${cy}) rotate(${rotation})">${elements}</g>`;
+
+    // Label
+    if (label) {
+        const display = windUnit === 'kmh' ? Math.round(speedKn * 1.852) + ' km/h' : Math.round(speedKn) + ' kn';
+        label.innerHTML = `${display}<br>${windDirLabel(dirDeg)}`;
+    }
 }
 
 function renderAlerts(alertas) {
