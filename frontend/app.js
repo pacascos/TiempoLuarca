@@ -245,12 +245,12 @@ function renderWindBarb(speedKn, dirDeg) {
         return;
     }
 
-    const cx = 40, cy = 40;
-    const staffLen = 30;
-    const barbLen = 12;
-    const shortBarbLen = 7;
-    const barbSpacing = 5;
-    const pennantWidth = 5;
+    const cx = 30, cy = 30;
+    const staffLen = 22;
+    const barbLen = 10;
+    const shortBarbLen = 6;
+    const barbSpacing = 4;
+    const pennantWidth = 4;
 
     // Descomponer velocidad en banderines (50kn), barras largas (10kn) y cortas (5kn)
     let remaining = Math.round(speedKn / 5) * 5; // Redondear a 5
@@ -267,7 +267,7 @@ function renderWindBarb(speedKn, dirDeg) {
 
     // Palo principal con punta de flecha en la base (hacia donde sopla)
     elements += `<line x1="0" y1="0" x2="0" y2="${staffLen}" stroke="${strokeColor}" stroke-width="2" stroke-linecap="round"/>`;
-    elements += `<polygon points="-4,${staffLen - 6} 4,${staffLen - 6} 0,${staffLen}" fill="${strokeColor}"/>`;
+    elements += `<polygon points="-3,${staffLen - 5} 3,${staffLen - 5} 0,${staffLen}" fill="${strokeColor}"/>`;
 
     // Circulo en la base si calma (<3 nudos)
     if (speedKn < 3) {
