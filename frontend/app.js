@@ -1171,7 +1171,8 @@ function drawDetailChart(type) {
 
     ctx.clearRect(0, 0, W, H);
 
-    const pad = { top: 20, right: 12, bottom: 32, left: 45 };
+    const hasSecondary = config.series.some(s => s.secondary);
+    const pad = { top: 20, right: hasSecondary ? 40 : 12, bottom: 32, left: 45 };
     const plotW = W - pad.left - pad.right;
     const plotH = H - pad.top - pad.bottom;
 
@@ -1333,6 +1334,16 @@ function drawDetailChart(type) {
             ctx.globalAlpha = 0.5;
             drawLine(s, sRange);
             ctx.globalAlpha = 1;
+        }
+        // Eje secundario a la derecha
+        ctx.fillStyle = '#8895a780';
+        ctx.font = '10px -apple-system, sans-serif';
+        ctx.textAlign = 'left';
+        const sGridLines = 4;
+        for (let i = 0; i <= sGridLines; i++) {
+            const val = sRange.max - ((sRange.max - sRange.min) / sGridLines) * i;
+            const y = pad.top + (plotH / sGridLines) * i;
+            ctx.fillText(Math.round(val * 10) / 10, pad.left + plotW + 4, y + 4);
         }
     }
 
