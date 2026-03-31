@@ -554,6 +554,14 @@ async def api_summary():
             label = DAY_NAMES[d.weekday()]
         days.append({"key": f"day{i}", "label": label, "date": date_str})
 
+    import math
+    def _circular_mean(angles_deg):
+        """Media circular de ángulos en grados (para dirección de viento)."""
+        sin_sum = sum(math.sin(math.radians(a)) for a in angles_deg)
+        cos_sum = sum(math.cos(math.radians(a)) for a in angles_deg)
+        mean = math.degrees(math.atan2(sin_sum, cos_sum))
+        return round(mean % 360)
+
     def summarize_day(date_str: str) -> dict:
         day_hours = [f for f in forecast if f.get("timestamp", "").startswith(date_str)]
         # Solo horas de luz (7-21)
@@ -572,6 +580,7 @@ async def api_summary():
             scores.append(scored["score"])
 
         vientos = [f.get("viento_nudos") for f in daylight if f.get("viento_nudos") is not None]
+        viento_dirs = [f.get("viento_dir") for f in daylight if f.get("viento_dir") is not None]
         rachas = [f.get("viento_racha_nudos") for f in daylight if f.get("viento_racha_nudos") is not None]
         olas = [marine_by_hour.get(f.get("timestamp", "")[:13], {}).get("ola_altura") for f in daylight]
         olas = [o for o in olas if o is not None]
@@ -610,6 +619,7 @@ async def api_summary():
             "recomendacion": recomendacion,
             "viento_medio": round(sum(vientos) / len(vientos), 1) if vientos else None,
             "viento_max": round(max(vientos), 1) if vientos else None,
+            "viento_dir_predominante": _circular_mean(viento_dirs) if viento_dirs else None,
             "racha_max": round(max(rachas), 1) if rachas else None,
             "ola_media": round(sum(olas) / len(olas), 2) if olas else None,
             "ola_max": round(max(olas), 2) if olas else None,

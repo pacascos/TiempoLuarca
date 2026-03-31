@@ -306,15 +306,17 @@ function renderWindBarb(speedKn, dirDeg) {
 
     svg.innerHTML = `<g transform="translate(${cx},${cy}) rotate(${rotation})">${elements}</g>`;
 
-    // Label con max del dia
+    // Label: actual + predominante del dia
     if (label) {
         const display = windUnit === 'kmh' ? Math.round(speedKn * 1.852) + ' km/h' : Math.round(speedKn) + ' kn';
-        let maxTxt = '';
-        if (summaryData && summaryData.days && summaryData.days[0] && summaryData.days[0].racha_max != null) {
-            const maxVal = windUnit === 'kmh' ? Math.round(summaryData.days[0].racha_max * 1.852) : Math.round(summaryData.days[0].racha_max);
-            maxTxt = `<br><span style="font-size:0.6rem;opacity:0.6">Max hoy: ${maxVal} ${windLabel()}</span>`;
+        let dayTxt = '';
+        const today = summaryData?.days?.[0];
+        if (today && today.viento_medio != null) {
+            const avgVal = windUnit === 'kmh' ? Math.round(today.viento_medio * 1.852) : Math.round(today.viento_medio);
+            const dirTxt = today.viento_dir_predominante != null ? windDirLabel(today.viento_dir_predominante) : '';
+            dayTxt = `<br><span style="font-size:0.6rem;opacity:0.6">Hoy: ${avgVal} ${windLabel()} ${dirTxt}</span>`;
         }
-        label.innerHTML = `${display} ${windDirLabel(dirDeg)}${maxTxt}`;
+        label.innerHTML = `${display} ${windDirLabel(dirDeg)}${dayTxt}`;
     }
 }
 
