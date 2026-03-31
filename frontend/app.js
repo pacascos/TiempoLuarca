@@ -957,6 +957,107 @@ window.addEventListener('resize', () => {
     if (tidesData) drawTideChart();
 });
 
+// ─── Moon ────────────────────────────────────────────────────────────────────
+
+function renderMoon() {
+    const container = document.getElementById('moonSection');
+    if (!container) return;
+
+    const now = new Date();
+
+    // Fase lunar: 0=nueva, 0.25=cuarto creciente, 0.5=llena, 0.75=cuarto menguante
+    const ref = new Date(2000, 0, 6, 18, 14); // Luna nueva referencia
+    const diff = (now - ref) / 86400000;
+    const cycle = 29.53058867;
+    const phase = ((diff % cycle) + cycle) % cycle / cycle;
+
+    // Iluminación
+    const illum = Math.round((1 - Math.cos(2 * Math.PI * phase)) / 2 * 100);
+
+    // Nombre y emoji
+    const phases = [
+        { max: 0.0625, name: 'Luna nueva', emoji: '🌑' },
+        { max: 0.1875, name: 'Creciente', emoji: '🌒' },
+        { max: 0.3125, name: 'Cuarto creciente', emoji: '🌓' },
+        { max: 0.4375, name: 'Gibosa creciente', emoji: '🌔' },
+        { max: 0.5625, name: 'Luna llena', emoji: '🌕' },
+        { max: 0.6875, name: 'Gibosa menguante', emoji: '🌖' },
+        { max: 0.8125, name: 'Cuarto menguante', emoji: '🌗' },
+        { max: 0.9375, name: 'Menguante', emoji: '🌘' },
+        { max: 1.01, name: 'Luna nueva', emoji: '🌑' },
+    ];
+    const current = phases.find(p => phase < p.max);
+
+    // Próximas fases principales
+    function nextPhaseDate(targetPhase) {
+        let d = (targetPhase - phase) * cycle;
+        if (d <= 0) d += cycle;
+        const date = new Date(now.getTime() + d * 86400000);
+        return date.getDate() + ' ' + ['Ene','Feb','Mar','Abr','May','Jun','Jul','Ago','Sep','Oct','Nov','Dic'][date.getMonth()];
+    }
+
+    // Dibujar luna en canvas
+    const canvasId = 'moonCanvas';
+    container.innerHTML = `
+        <div class="moon-visual">
+            <canvas id="${canvasId}" width="120" height="120"></canvas>
+        </div>
+        <div class="moon-info">
+            <div class="moon-phase-name">${current.emoji} ${current.name}</div>
+            <div class="moon-detail">Iluminacion: ${illum}%</div>
+            <div class="moon-upcoming">
+                <div class="moon-upcoming-item"><span class="moon-emoji">🌑</span>${nextPhaseDate(0)}</div>
+                <div class="moon-upcoming-item"><span class="moon-emoji">🌓</span>${nextPhaseDate(0.25)}</div>
+                <div class="moon-upcoming-item"><span class="moon-emoji">🌕</span>${nextPhaseDate(0.5)}</div>
+                <div class="moon-upcoming-item"><span class="moon-emoji">🌗</span>${nextPhaseDate(0.75)}</div>
+            </div>
+        </div>
+    `;
+
+    // Dibujar la luna gráficamente
+    const canvas = document.getElementById(canvasId);
+    if (!canvas) return;
+    const ctx = canvas.getContext('2d');
+    const dpr = window.devicePixelRatio || 1;
+    canvas.width = 120 * dpr;
+    canvas.height = 120 * dpr;
+    ctx.scale(dpr, dpr);
+    const cx = 60, cy = 60, r = 40;
+
+    // Disco lunar (gris claro)
+    ctx.beginPath();
+    ctx.arc(cx, cy, r, 0, Math.PI * 2);
+    ctx.fillStyle = '#e8e4d4';
+    ctx.fill();
+
+    // Sombra: depende de la fase
+    // phase 0=nueva (todo sombra), 0.5=llena (sin sombra)
+    ctx.beginPath();
+    if (phase <= 0.5) {
+        // Creciente: sombra desde la izquierda
+        const shadowX = Math.cos(phase * 2 * Math.PI) * r;
+        ctx.arc(cx, cy, r, -Math.PI/2, Math.PI/2, false); // mitad derecha
+        ctx.ellipse(cx, cy, Math.abs(shadowX), r, 0, Math.PI/2, -Math.PI/2, shadowX > 0);
+    } else {
+        // Menguante: sombra desde la derecha
+        const shadowX = Math.cos(phase * 2 * Math.PI) * r;
+        ctx.arc(cx, cy, r, Math.PI/2, -Math.PI/2, false); // mitad izquierda
+        ctx.ellipse(cx, cy, Math.abs(shadowX), r, 0, -Math.PI/2, Math.PI/2, shadowX < 0);
+    }
+    ctx.fillStyle = '#1a1a2e';
+    ctx.fill();
+
+    // Borde sutil
+    ctx.beginPath();
+    ctx.arc(cx, cy, r, 0, Math.PI * 2);
+    ctx.strokeStyle = 'rgba(255,255,255,0.1)';
+    ctx.lineWidth = 1;
+    ctx.stroke();
+}
+
+// Renderizar luna al cargar
+document.addEventListener('DOMContentLoaded', () => renderMoon());
+
 // ─── Collapsible sections ─────────────────────────────────────────────────────
 
 window.toggleSection = function(id) {

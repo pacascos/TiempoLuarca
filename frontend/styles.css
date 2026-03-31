@@ -798,6 +798,51 @@ h2 {
 .tide-next-item.bajamar { border-top: 3px solid var(--accent); }
 .tide-next-item.bajamar .tide-next-type { color: var(--accent); }
 
+/* ─── Moon ────────────────────────────────────────────────────────────────── */
+.moon-section {
+    margin-top: 1.2rem;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    gap: 1rem;
+}
+.moon-visual {
+    position: relative;
+    width: 60px;
+    height: 60px;
+}
+.moon-visual canvas {
+    width: 100%;
+    height: 100%;
+}
+.moon-info {
+    text-align: left;
+}
+.moon-phase-name {
+    font-size: 0.9rem;
+    font-weight: 700;
+    color: var(--text);
+}
+.moon-detail {
+    font-size: 0.72rem;
+    color: var(--text-dim);
+    line-height: 1.5;
+}
+.moon-upcoming {
+    display: flex;
+    gap: 0.8rem;
+    margin-top: 0.3rem;
+}
+.moon-upcoming-item {
+    font-size: 0.65rem;
+    color: var(--text-dim);
+    text-align: center;
+}
+.moon-upcoming-item .moon-emoji {
+    font-size: 1rem;
+    display: block;
+}
+
 /* ─── Feedback ────────────────────────────────────────────────────────────── */
 .feedback-desc {
     color: var(--text-dim);
