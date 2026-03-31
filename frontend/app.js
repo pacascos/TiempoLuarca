@@ -269,8 +269,8 @@ function renderWindBarb(speedKn, dirDeg) {
 
     // Palo centrado
     elements += `<line x1="0" y1="${-half}" x2="0" y2="${half}" stroke="${strokeColor}" stroke-width="2" stroke-linecap="round"/>`;
-    // Punta de flecha abajo (hacia donde sopla)
-    elements += `<polygon points="-3,${half - 4} 3,${half - 4} 0,${half}" fill="${strokeColor}"/>`;
+    // Punta de flecha grande abajo (hacia donde sopla) - MUY visible
+    elements += `<polygon points="-5,${half - 7} 5,${half - 7} 0,${half}" fill="${strokeColor}"/>`;
 
     // Circulo si calma (<3 nudos)
     if (speedKn < 3) {
@@ -280,6 +280,9 @@ function renderWindBarb(speedKn, dirDeg) {
     }
 
     let pos = -half; // Empezar desde arriba (de donde viene el viento)
+
+    // Punto grueso en el extremo de donde viene (para que se vea cual es "arriba")
+    elements += `<circle cx="0" cy="${-half}" r="2" fill="${strokeColor}"/>`;
 
     // Banderines (triángulos = 50 nudos)
     for (let i = 0; i < pennants; i++) {
