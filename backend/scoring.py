@@ -417,13 +417,21 @@ def calculate_score(inp: ScoringInput) -> ScoringResult:
         score = min(score, 5)
     elif so <= 4:
         score = min(score, 5)
+    elif so <= 5:
+        score = min(score, 6)
     if sr <= 3:
         score = min(score, 5)
     if svis <= 2:
         score = min(score, 4)
-    # Presion cayendo rapido = borrasca, limitar score
     if spres <= 3:
         score = min(score, 5)
+
+    # Regla combinada: si varios factores son malos a la vez, penalizar más
+    bad_count = sum(1 for s in [sv, so, sl, svis, snub, stemp, sr] if s <= 4)
+    if bad_count >= 4:
+        score = min(score, 3)
+    elif bad_count >= 3:
+        score = min(score, 4)
 
     label, color, recomendacion = LABELS[score]
 
