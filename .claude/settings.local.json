@@ -67,7 +67,8 @@
       "WebFetch(domain:climalert-docs.imida.es)",
       "Bash(xargs cat:*)",
       "Bash(grep -r \"TODO\\\\|FIXME\\\\|BUG\\\\|HACK\" /Users/cascos/code/TiempoLuarca --include=*.py --include=*.js)",
-      "Bash(grep -n \"except\" /Users/cascos/code/TiempoLuarca/backend/*.py)"
+      "Bash(grep -n \"except\" /Users/cascos/code/TiempoLuarca/backend/*.py)",
+      "WebFetch(domain:lainakai.com)"
     ]
   }
 }

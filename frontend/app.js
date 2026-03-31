@@ -137,10 +137,25 @@ function renderCurrent(data) {
         setScoreBar('barOleaje', score.scores.oleaje);
     }
 
-    // Wind barb en el score principal
+    // Wind barb + weather emoji en el score principal
     const obs = data.observacion;
     if (obs) {
         renderWindBarb(obs.viento_vel_nudos, obs.viento_dir);
+    }
+    // Emoji del cielo basado en nubosidad y lluvia
+    const fcNowPre = data.forecast_now;
+    const emojiEl = document.getElementById('weatherEmoji');
+    if (emojiEl && fcNowPre) {
+        const nub = fcNowPre.nubosidad ?? 50;
+        const lluvia = fcNowPre.prob_precipitacion ?? 0;
+        let emoji;
+        if (lluvia >= 70) emoji = '🌧️';       // lluvia fuerte
+        else if (lluvia >= 40) emoji = '🌦️';   // lluvia y claros
+        else if (nub >= 80) emoji = '☁️';       // cubierto
+        else if (nub >= 50) emoji = '⛅';       // nubes y sol
+        else if (nub >= 20) emoji = '🌤️';      // poco nublado
+        else emoji = '☀️';                      // despejado
+        emojiEl.textContent = emoji;
     }
 
     // Observation data
