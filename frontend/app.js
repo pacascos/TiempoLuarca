@@ -298,9 +298,9 @@ function renderWindBarb(speedKn, dirDeg) {
     }
 
     // Rotar según dirección del viento (de donde viene)
-    // dirDeg=0 → del Norte → palo apunta hacia abajo (180°)
-    // En SVG: rotate(dirDeg+180) centra en cx,cy
-    const rotation = dirDeg + 180;
+    // Sin rotación: barbas arriba (N), flecha abajo (S) = viento del Norte (0°)
+    // dirDeg=90 (del Este): rotar 90° → barbas a la derecha (E), flecha a la izquierda (W)
+    const rotation = dirDeg;
 
     svg.innerHTML = `<g transform="translate(${cx},${cy}) rotate(${rotation})">${elements}</g>`;
 
