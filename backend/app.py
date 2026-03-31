@@ -248,6 +248,19 @@ async def api_current():
             current_forecast = f
             break
 
+    # Lluvia: priorizar AEMET Valdés sobre Open-Meteo
+    aemet_valdes = _cache.get("prediccion_valdes") or []
+    aemet_by_hour_cur = {}
+    for av in aemet_valdes:
+        if av.get("fecha") and av.get("hora") is not None:
+            key = f"{av['fecha']}T{int(av['hora']):02d}"
+            aemet_by_hour_cur[key] = av
+
+    now_key = now.strftime("%Y-%m-%dT%H")
+    aemet_now = aemet_by_hour_cur.get(now_key)
+    if aemet_now and current_forecast and aemet_now.get("prob_precipitacion") is not None:
+        current_forecast = {**current_forecast, "prob_precipitacion": aemet_now["prob_precipitacion"]}
+
     # ─── Score principal: hora actual + próximas 4h (ventana de 5h) ──────────
     # Indexar forecast y marine por hora
     marine_by_hour = {}
@@ -267,6 +280,10 @@ async def api_current():
                 break
         m_h = marine_by_hour.get(h_str)
         if fc_h:
+            # Inyectar lluvia AEMET si hay
+            aemet_h = aemet_by_hour_cur.get(h_str)
+            if aemet_h and aemet_h.get("prob_precipitacion") is not None:
+                fc_h = {**fc_h, "prob_precipitacion": aemet_h["prob_precipitacion"]}
             scored = score_forecast_hour(fc_h, m_h)
             hour_scores.append(scored["score"])
 
@@ -405,6 +422,8 @@ async def api_current():
             "nubosidad": current_forecast.get("nubosidad") if current_forecast else None,
             "visibilidad": current_forecast.get("visibilidad") if current_forecast else None,
             "prob_precipitacion": current_forecast.get("prob_precipitacion") if current_forecast else None,
+            "cielo": aemet_now.get("cielo") if aemet_now else None,
+            "fuente_lluvia": "AEMET" if (aemet_now and aemet_now.get("prob_precipitacion") is not None) else "Open-Meteo",
         } if current_forecast else None,
         "presion_trend": presion_trend,
         "alertas": _cache.get("alertas_costeras") or [],
@@ -424,10 +443,18 @@ async def api_forecast():
     forecast = _cache.get("forecast") or []
     marine = _cache.get("oleaje") or []
 
+    # Indexar AEMET Valdés por fecha+hora para lluvia (más fiable que Open-Meteo)
+    aemet_by_hour = {}
+    aemet_valdes = _cache.get("prediccion_valdes") or []
+    for av in aemet_valdes:
+        if av.get("fecha") and av.get("hora") is not None:
+            key = f"{av['fecha']}T{int(av['hora']):02d}"
+            aemet_by_hour[key] = av
+
     # Indexar datos marinos por hora
     marine_by_hour = {}
     for m in marine:
-        ts = m.get("timestamp", "")[:13]  # "2024-01-01T12"
+        ts = m.get("timestamp", "")[:13]
         marine_by_hour[ts] = m
 
     # Indexar presion por hora para calcular tendencia 6h
@@ -451,7 +478,18 @@ async def api_forecast():
                     p_trend = round(f["presion"] - presion_by_hour[h_6ago], 1)
             except Exception:
                 pass
-        scored = score_forecast_hour(f, m, presion_trend=p_trend)
+        # Lluvia: priorizar AEMET Valdés (más fiable localmente)
+        aemet_h = aemet_by_hour.get(ts)
+        prob_precip = f.get("prob_precipitacion")
+        cielo_aemet = None
+        if aemet_h and aemet_h.get("prob_precipitacion") is not None:
+            prob_precip = aemet_h["prob_precipitacion"]
+            cielo_aemet = aemet_h.get("cielo")
+
+        # Inyectar en el forecast para que el scoring use AEMET
+        f_scoring = {**f, "prob_precipitacion": prob_precip}
+
+        scored = score_forecast_hour(f_scoring, m, presion_trend=p_trend)
         result.append({
             "timestamp": f.get("timestamp"),
             "temperatura": f.get("temperatura"),
@@ -459,8 +497,9 @@ async def api_forecast():
             "viento_nudos": f.get("viento_nudos"),
             "viento_dir": f.get("viento_dir"),
             "viento_racha_nudos": f.get("viento_racha_nudos"),
-            "prob_precipitacion": f.get("prob_precipitacion"),
+            "prob_precipitacion": prob_precip,
             "precipitacion": f.get("precipitacion"),
+            "cielo": cielo_aemet,
             "nubosidad": f.get("nubosidad"),
             "visibilidad": f.get("visibilidad"),
             "presion": f.get("presion"),
