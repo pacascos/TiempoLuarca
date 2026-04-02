@@ -298,28 +298,48 @@ def _score_nubosidad(pct: float | None) -> int:
 
 
 def _score_lluvia(prob: float | None, mm: float | None = None) -> int:
-    """Probabilidad de precipitación → score 10(seco)-1(diluvio)."""
+    """Combina probabilidad de precipitacion + intensidad en mm/h.
+    Probabilidad alta + poca cantidad = llovizna (score medio).
+    Probabilidad alta + mucha cantidad = lluvia fuerte (score bajo)."""
     if prob is None:
-        return 8  # sin datos, asumimos ok
-    if prob <= 5:
-        return 10
-    if prob <= 15:
-        return 9
-    if prob <= 25:
         return 8
-    if prob <= 35:
-        return 7
-    if prob <= 45:
-        return 6
-    if prob <= 55:
-        return 5
-    if prob <= 65:
-        return 4
-    if prob <= 75:
-        return 3
-    if prob <= 85:
-        return 2
-    return 1
+
+    # Score base por probabilidad
+    if prob <= 5:
+        base_prob = 10
+    elif prob <= 15:
+        base_prob = 9
+    elif prob <= 30:
+        base_prob = 8
+    elif prob <= 45:
+        base_prob = 7
+    elif prob <= 60:
+        base_prob = 6
+    elif prob <= 75:
+        base_prob = 5
+    elif prob <= 85:
+        base_prob = 4
+    elif prob <= 95:
+        base_prob = 3
+    else:
+        base_prob = 2
+
+    # Si tenemos intensidad en mm/h, ajustar
+    if mm is not None and mm > 0 and prob > 30:
+        if mm >= 5:
+            score_mm = 1   # lluvia fuerte
+        elif mm >= 2:
+            score_mm = 3   # lluvia moderada
+        elif mm >= 0.5:
+            score_mm = 5   # lluvia ligera
+        elif mm >= 0.1:
+            score_mm = 7   # llovizna
+        else:
+            score_mm = 8   # casi nada
+        # Combinar: el peor de los dos pesa mas
+        return max(1, round(min(base_prob, score_mm) * 0.6 + max(base_prob, score_mm) * 0.4))
+
+    return base_prob
 
 
 def _score_visibilidad(vis_m: float | None) -> int:
