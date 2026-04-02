@@ -426,8 +426,13 @@ def calculate_score(inp: ScoringInput) -> ScoringResult:
     if spres <= 3:
         score = min(score, 5)
 
-    # Regla combinada: si varios factores son malos a la vez, penalizar más
-    bad_count = sum(1 for s in [sv, so, sl, svis, snub, stemp, sr] if s <= 4)
+    # Lluvia muy alta limita el score (no es seguridad pero arruina la salida)
+    if sl <= 2:
+        score = min(score, 5)
+
+    # Regla combinada: si varios factores de seguridad son malos a la vez
+    # (no cuenta temperatura ni nubosidad que son confort)
+    bad_count = sum(1 for s in [sv, so, sl, svis, sr] if s <= 4)
     if bad_count >= 4:
         score = min(score, 3)
     elif bad_count >= 3:
