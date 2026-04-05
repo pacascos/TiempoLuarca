@@ -1215,6 +1215,12 @@ window.toggleSection = function(id) {
                 selectPortus('oleaje');
             }
         }
+        if (id === 'webcam') {
+            const frame = document.getElementById('webcamFrame');
+            if (!frame.src || frame.src === '' || frame.src === window.location.href) {
+                frame.src = 'https://rtsp.me/embed/Ti49NGnd/';
+            }
+        }
     }
 };
 
