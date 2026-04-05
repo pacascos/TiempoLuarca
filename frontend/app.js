@@ -451,7 +451,53 @@ window.selectForecastDay = function(date) {
 function renderForecastDay(date) {
     const hours = forecastData.filter(f => f.timestamp.startsWith(date));
     renderForecastChart(hours);
-    renderForecastTable(hours);
+
+    // Agrupar horas nocturnas (00-07, 21-23) de dos en dos
+    const grouped = [];
+    let i = 0;
+    while (i < hours.length) {
+        const h = parseInt(hours[i].timestamp.slice(11, 13));
+        if (h < 8 || h >= 21) {
+            // Nocturna: agrupar con la siguiente si existe
+            if (i + 1 < hours.length) {
+                const h2 = parseInt(hours[i + 1].timestamp.slice(11, 13));
+                if (h2 < 8 || h2 >= 21) {
+                    grouped.push(mergeHours(hours[i], hours[i + 1]));
+                    i += 2;
+                    continue;
+                }
+            }
+        }
+        grouped.push(hours[i]);
+        i++;
+    }
+    renderForecastTable(grouped);
+}
+
+function mergeHours(a, b) {
+    // Combinar dos horas: mostrar rango, usar peores valores
+    const tA = a.timestamp.slice(11, 16);
+    const tB = b.timestamp.slice(11, 16);
+    return {
+        ...a,
+        timestamp: a.timestamp, // mantener para isNow
+        _merged: `${tA}-${tB}`,
+        score: Math.min(a.score || 5, b.score || 5),
+        viento_nudos: Math.max(a.viento_nudos ?? 0, b.viento_nudos ?? 0),
+        viento_racha_nudos: Math.max(a.viento_racha_nudos ?? 0, b.viento_racha_nudos ?? 0),
+        viento_dir: a.viento_dir,
+        swell_altura: Math.max(a.swell_altura ?? 0, b.swell_altura ?? 0),
+        swell_periodo: a.swell_periodo,
+        viento_ola_altura: Math.max(a.viento_ola_altura ?? 0, b.viento_ola_altura ?? 0),
+        viento_ola_periodo: a.viento_ola_periodo,
+        ola_altura: Math.max(a.ola_altura ?? 0, b.ola_altura ?? 0),
+        prob_precipitacion: Math.max(a.prob_precipitacion ?? 0, b.prob_precipitacion ?? 0),
+        precipitacion: (a.precipitacion ?? 0) + (b.precipitacion ?? 0),
+        visibilidad: Math.min(a.visibilidad ?? 99999, b.visibilidad ?? 99999),
+        nubosidad: Math.max(a.nubosidad ?? 0, b.nubosidad ?? 0),
+        temperatura: Math.round(((a.temperatura ?? 0) + (b.temperatura ?? 0)) / 2 * 10) / 10,
+        temp_agua: a.temp_agua,
+    };
 }
 
 function renderForecastChart(hours) {
@@ -561,8 +607,8 @@ function renderForecastTable(hours) {
     tbody.innerHTML = hours.map(h => {
         const score = h.score || 5;
         const color = SCORE_COLORS[score] || '#666';
-        const time = h.timestamp.slice(11, 16);
-        const isNow = h.timestamp.slice(0, 13) === nowHour;
+        const time = h._merged || h.timestamp.slice(11, 16);
+        const isNow = !h._merged && h.timestamp.slice(0, 13) === nowHour;
         const windDir = h.viento_dir != null ? h.viento_dir : '';
         const wc = windColor(h.viento_nudos);
         const rc = windColor(h.viento_racha_nudos);
