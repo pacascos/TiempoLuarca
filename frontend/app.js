@@ -619,17 +619,41 @@ async function loadExtended() {
     }
 }
 
+let extendedData = [];
+let selectedExtDay = null;
+
 function renderExtended(days) {
+    extendedData = days;
     const container = document.getElementById('extendedContainer');
     if (!days.length) {
         container.innerHTML = '<p class="loading">Sin datos extendidos</p>';
         return;
     }
 
-    container.innerHTML = days.map((d, i) => {
+    const todayStr = localDateStr();
+
+    // Cabecera Lun-Dom
+    const dayHeaders = ['Lun', 'Mar', 'Mie', 'Jue', 'Vie', 'Sab', 'Dom'];
+    let html = '<div class="ext-cal-header">';
+    dayHeaders.forEach(d => { html += `<span>${d}</span>`; });
+    html += '</div><div class="ext-cal-grid">';
+
+    // Calcular offset: qué día de la semana es el primero
+    const firstDate = new Date(days[0].fecha + 'T12:00:00');
+    const firstDow = (firstDate.getDay() + 6) % 7; // 0=Lun, 6=Dom
+
+    // Celdas vacías al inicio
+    for (let i = 0; i < firstDow; i++) {
+        html += '<div class="ext-cell empty"></div>';
+    }
+
+    // Celdas de días
+    days.forEach((d, i) => {
         const color = SCORE_COLORS[d.score] || '#666';
+        const isToday = d.fecha === todayStr;
         const conf = d.fiable ? '' : ' low-confidence';
-        const confBadge = d.fiable ? '' : '<span class="ext-low-badge">~</span>';
+        const todayCls = isToday ? ' today' : '';
+        const dayNum = d.fecha.slice(8, 10);
 
         // Emoji cielo
         const nub = d.nubosidad ?? 50;
@@ -642,26 +666,68 @@ function renderExtended(days) {
         else if (nub >= 20) emoji = '🌤️';
         else emoji = '☀️';
 
-        const fecha = d.fecha || '';
-        const dayNum = fecha.slice(8, 10);
-        const month = fecha.slice(5, 7);
-
-        return `<div class="ext-day${conf}" style="border-top: 3px solid ${color}" onclick="goToForecastDay('${fecha}')">
-            ${confBadge}
-            <div class="ext-day-name">${d.dia}</div>
-            <div class="ext-day-date">${dayNum}/${month}</div>
-            <div class="ext-day-emoji">${emoji}</div>
-            <div class="ext-day-score" style="color: ${color}">${d.score}</div>
-            <div class="ext-day-label" style="color: ${color}">${d.label}</div>
-            <div class="ext-day-details">
-                <span style="color:${windColor(d.viento_max_kn)}">${knToDisplay(d.viento_max_kn)} ${windLabel()}</span>
-                <span style="color:${swellColor(d.ola_max)}">${d.ola_max != null ? d.ola_max.toFixed(1) + 'm' : '--'}</span><br>
-                <span style="color:${rainColor(d.prob_precipitacion)}">${d.prob_precipitacion ?? '--'}%</span>
-                ${d.temp_min != null ? `<span style="color:${tempColor(d.temp_min)}">${Math.round(d.temp_min)}°/${Math.round(d.temp_max)}°</span>` : ''}
-            </div>
+        html += `<div class="ext-cell${conf}${todayCls}" onclick="toggleExtDetail('${d.fecha}')" style="border-top: 3px solid ${color}">
+            <div class="ext-cell-date">${dayNum}</div>
+            <div class="ext-cell-score" style="color:${color}">${d.score}</div>
+            <div class="ext-cell-emoji">${emoji}</div>
         </div>`;
-    }).join('');
+
+        // Insertar panel detalle después del último día de la semana (Dom) o último día
+        const cellPos = firstDow + i;
+        if (cellPos % 7 === 6 || i === days.length - 1) {
+            html += `<div class="ext-detail" id="extDetail-week${Math.floor(cellPos / 7)}"></div>`;
+        }
+    });
+
+    html += '</div>';
+    container.innerHTML = html;
 }
+
+window.toggleExtDetail = function(fecha) {
+    const d = extendedData.find(x => x.fecha === fecha);
+    if (!d) return;
+
+    // Encontrar en qué semana está
+    const firstDate = new Date(extendedData[0].fecha + 'T12:00:00');
+    const firstDow = (firstDate.getDay() + 6) % 7;
+    const idx = extendedData.indexOf(d);
+    const weekNum = Math.floor((firstDow + idx) / 7);
+    const panelId = `extDetail-week${weekNum}`;
+    const panel = document.getElementById(panelId);
+    if (!panel) return;
+
+    // Toggle
+    if (selectedExtDay === fecha) {
+        panel.classList.remove('open');
+        selectedExtDay = null;
+        return;
+    }
+    // Cerrar todos
+    document.querySelectorAll('.ext-detail').forEach(p => p.classList.remove('open'));
+    selectedExtDay = fecha;
+
+    const color = SCORE_COLORS[d.score] || '#666';
+    const fiableText = d.fiable ? '' : ' <span style="color:var(--text-dim);font-size:0.7rem">(fiabilidad baja)</span>';
+    const dayNames = {Lun:'Lunes',Mar:'Martes',Mie:'Miercoles',Jue:'Jueves',Vie:'Viernes',Sab:'Sabado',Dom:'Domingo'};
+
+    panel.innerHTML = `
+        <div class="ext-detail-header">
+            <h3 style="color:${color}">${d.score}/10 ${d.label} — ${dayNames[d.dia] || d.dia} ${d.fecha.slice(8,10)}/${d.fecha.slice(5,7)}${fiableText}</h3>
+            <button class="ext-detail-close" onclick="toggleExtDetail('${fecha}')">&times;</button>
+        </div>
+        <div class="ext-detail-grid">
+            <div class="ext-detail-item"><div class="ext-val" style="color:${windColor(d.viento_max_kn)}">${knToDisplay(d.viento_max_kn)}</div><div class="ext-lbl">Viento max (${windLabel()})</div></div>
+            <div class="ext-detail-item"><div class="ext-val" style="color:${windColor(d.racha_max_kn)}">${knToDisplay(d.racha_max_kn)}</div><div class="ext-lbl">Racha max</div></div>
+            <div class="ext-detail-item"><div class="ext-val" style="color:${swellColor(d.ola_max)}">${d.ola_max != null ? d.ola_max.toFixed(1) + 'm' : '--'}</div><div class="ext-lbl">Ola max</div></div>
+            <div class="ext-detail-item"><div class="ext-val" style="color:${swellColor(d.swell_max)}">${d.swell_max != null ? d.swell_max.toFixed(1) + 'm' : '--'}</div><div class="ext-lbl">Swell max</div></div>
+            <div class="ext-detail-item"><div class="ext-val" style="color:${rainColor(d.prob_precipitacion)}">${d.prob_precipitacion ?? '--'}%</div><div class="ext-lbl">Lluvia</div></div>
+            <div class="ext-detail-item"><div class="ext-val" style="color:${cloudColor(d.nubosidad)}">${d.nubosidad != null ? Math.round(d.nubosidad) + '%' : '--'}</div><div class="ext-lbl">Nubes</div></div>
+            <div class="ext-detail-item"><div class="ext-val" style="color:${tempColor(d.temp_min)}">${d.temp_min != null ? Math.round(d.temp_min) + '°/' + Math.round(d.temp_max) + '°' : '--'}</div><div class="ext-lbl">Temperatura</div></div>
+            <div class="ext-detail-item"><div class="ext-val" style="color:#06b6d4">${d.temp_agua != null ? d.temp_agua.toFixed(1) + '°' : '--'}</div><div class="ext-lbl">Agua</div></div>
+        </div>
+    `;
+    panel.classList.add('open');
+};
 
 // ─── Tides ───────────────────────────────────────────────────────────────────
 
