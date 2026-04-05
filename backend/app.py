@@ -17,6 +17,7 @@ from backend.data_sources import (
     get_aemet_prediccion_costera, get_aemet_prediccion_playa,
     get_aemet_alertas_costeras,
     get_ihm_mareas, get_open_meteo_marine, get_open_meteo_forecast,
+    get_open_meteo_extended,
 )
 from backend.scoring import ScoringInput, calculate_score, score_forecast_hour
 from backend.database import init_db, save_snapshot, save_hourly_batch, save_feedback, get_feedback_list, get_history
@@ -66,6 +67,7 @@ _sources = {
     "prediccion_costera": SourceCache("AEMET Costera",   get_aemet_prediccion_costera, ttl_minutes=180),
     "prediccion_playa":   SourceCache("AEMET Playa",     get_aemet_prediccion_playa, ttl_minutes=180),
     "alertas_costeras":   SourceCache("AEMET Alertas",   get_aemet_alertas_costeras, ttl_minutes=30),
+    "extended":           SourceCache("Extended 16d",    get_open_meteo_extended, ttl_minutes=180),
     "mareas":             SourceCache("IHM Mareas",      lambda: get_ihm_mareas(days=8), ttl_minutes=720),
     "oleaje":             SourceCache("Open-Meteo Marine", get_open_meteo_marine, ttl_minutes=60),
     "forecast":           SourceCache("Open-Meteo Forecast", get_open_meteo_forecast, ttl_minutes=60),
@@ -669,6 +671,66 @@ async def api_refresh():
     """Forzar actualización de todas las fuentes."""
     await _refresh_cache(force=True)
     return {"ok": True, "timestamp": _cache.get("timestamp")}
+
+
+@app.get("/api/extended")
+async def api_extended():
+    """Previsión extendida 16 días con score diario orientativo."""
+    if not _cache:
+        raise HTTPException(503, "Datos no disponibles todavía")
+
+    extended = _cache.get("extended") or []
+    if not extended:
+        return {"days": [], "updated": _cache.get("timestamp")}
+
+    DAY_NAMES = ["Lun", "Mar", "Mie", "Jue", "Vie", "Sab", "Dom"]
+
+    result = []
+    for i, d in enumerate(extended):
+        # Score orientativo diario
+        inp = ScoringInput(
+            viento_nudos=d.get("viento_max_kn"),
+            racha_nudos=d.get("racha_max_kn"),
+            swell_altura=d.get("swell_max"),
+            viento_ola_altura=d.get("chop_max"),
+            ola_altura=d.get("ola_max"),
+            ola_periodo=d.get("periodo_max"),
+            prob_precipitacion=d.get("prob_precipitacion"),
+            precipitacion_mm=d.get("precipitacion_mm"),
+            nubosidad=d.get("nubosidad"),
+            temperatura=(d.get("temp_max", 15) + d.get("temp_min", 10)) / 2 if d.get("temp_max") else None,
+        )
+        scored = calculate_score(inp)
+
+        fecha = d.get("fecha", "")
+        try:
+            from datetime import datetime as dt
+            day_dt = dt.strptime(fecha, "%Y-%m-%d")
+            day_name = DAY_NAMES[day_dt.weekday()]
+        except Exception:
+            day_name = ""
+
+        result.append({
+            "fecha": fecha,
+            "dia": day_name,
+            "fiable": i < 7,  # primeros 7 dias = fiable
+            "score": scored.score,
+            "label": scored.label,
+            "color": scored.color,
+            "viento_max_kn": d.get("viento_max_kn"),
+            "racha_max_kn": d.get("racha_max_kn"),
+            "ola_max": d.get("ola_max"),
+            "swell_max": d.get("swell_max"),
+            "prob_precipitacion": d.get("prob_precipitacion"),
+            "precipitacion_mm": d.get("precipitacion_mm"),
+            "nubosidad": d.get("nubosidad"),
+            "temp_max": d.get("temp_max"),
+            "temp_min": d.get("temp_min"),
+            "temp_agua": d.get("temp_agua"),
+            "viento_dir": d.get("viento_dir"),
+        })
+
+    return {"days": result, "updated": _cache.get("timestamp")}
 
 
 @app.get("/api/cache-status")

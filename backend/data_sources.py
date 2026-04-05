@@ -498,6 +498,58 @@ async def get_open_meteo_forecast() -> list | None:
         return None
 
 
+# ─── Open-Meteo: Previsión extendida 16 días (diaria) ─────────────────────────
+
+async def get_open_meteo_extended() -> list | None:
+    """Previsión diaria a 16 días: meteo + oleaje combinados."""
+    try:
+        async with httpx.AsyncClient(timeout=TIMEOUT) as client:
+            # Meteo diario
+            r1 = await client.get(OPEN_METEO_FORECAST_URL, params={
+                "latitude": LUARCA_LAT, "longitude": LUARCA_LON,
+                "daily": "temperature_2m_max,temperature_2m_min,precipitation_probability_max,precipitation_sum,wind_speed_10m_max,wind_gusts_10m_max,wind_direction_10m_dominant,cloud_cover_mean",
+                "timezone": "Europe/Madrid",
+                "forecast_days": 16,
+                "wind_speed_unit": "kn",
+            })
+            r1.raise_for_status()
+            meteo = r1.json().get("daily", {})
+
+            # Marine diario
+            r2 = await client.get(OPEN_METEO_MARINE_URL, params={
+                "latitude": LUARCA_LAT, "longitude": LUARCA_LON,
+                "daily": "wave_height_max,swell_wave_height_max,wind_wave_height_max,wave_period_max,sea_surface_temperature_max",
+                "timezone": "Europe/Madrid",
+                "forecast_days": 16,
+            })
+            r2.raise_for_status()
+            marine = r2.json().get("daily", {})
+
+        times = meteo.get("time", [])
+        result = []
+        for i, date in enumerate(times):
+            result.append({
+                "fecha": date,
+                "temp_max": meteo.get("temperature_2m_max", [None])[i],
+                "temp_min": meteo.get("temperature_2m_min", [None])[i],
+                "prob_precipitacion": meteo.get("precipitation_probability_max", [None])[i],
+                "precipitacion_mm": meteo.get("precipitation_sum", [None])[i],
+                "viento_max_kn": meteo.get("wind_speed_10m_max", [None])[i],
+                "racha_max_kn": meteo.get("wind_gusts_10m_max", [None])[i],
+                "viento_dir": meteo.get("wind_direction_10m_dominant", [None])[i],
+                "nubosidad": meteo.get("cloud_cover_mean", [None])[i],
+                "ola_max": marine.get("wave_height_max", [None])[i] if i < len(marine.get("wave_height_max", [])) else None,
+                "swell_max": marine.get("swell_wave_height_max", [None])[i] if i < len(marine.get("swell_wave_height_max", [])) else None,
+                "chop_max": marine.get("wind_wave_height_max", [None])[i] if i < len(marine.get("wind_wave_height_max", [])) else None,
+                "periodo_max": marine.get("wave_period_max", [None])[i] if i < len(marine.get("wave_period_max", [])) else None,
+                "temp_agua": marine.get("sea_surface_temperature_max", [None])[i] if i < len(marine.get("sea_surface_temperature_max", [])) else None,
+            })
+        return result
+    except Exception as e:
+        logger.error("Error Open-Meteo Extended: %s", e)
+        return None
+
+
 # ─── Agregador principal ─────────────────────────────────────────────────────
 
 async def fetch_all_data() -> dict:

@@ -72,6 +72,7 @@ async function loadAll() {
         loadCurrent(),
         loadSummary(),
         loadForecast(),
+        loadExtended(),
         loadTides(),
         loadFeedbackHistory(),
     ]);
@@ -604,6 +605,62 @@ function renderForecastTable(hours) {
 function formatNum(v) {
     if (v == null) return '--';
     return typeof v === 'number' ? Math.round(v * 10) / 10 : v;
+}
+
+// ─── Extended forecast (16 days) ──────────────────────────────────────────────
+
+async function loadExtended() {
+    try {
+        const res = await fetch(apiUrl('api/extended'));
+        const data = await res.json();
+        renderExtended(data.days || []);
+    } catch (e) {
+        console.error('Error loading extended:', e);
+    }
+}
+
+function renderExtended(days) {
+    const container = document.getElementById('extendedContainer');
+    if (!days.length) {
+        container.innerHTML = '<p class="loading">Sin datos extendidos</p>';
+        return;
+    }
+
+    container.innerHTML = days.map((d, i) => {
+        const color = SCORE_COLORS[d.score] || '#666';
+        const conf = d.fiable ? '' : ' low-confidence';
+        const confBadge = d.fiable ? '' : '<span class="ext-low-badge">~</span>';
+
+        // Emoji cielo
+        const nub = d.nubosidad ?? 50;
+        const lluvia = d.prob_precipitacion ?? 0;
+        let emoji;
+        if (lluvia >= 70) emoji = '🌧️';
+        else if (lluvia >= 40) emoji = '🌦️';
+        else if (nub >= 80) emoji = '☁️';
+        else if (nub >= 50) emoji = '⛅';
+        else if (nub >= 20) emoji = '🌤️';
+        else emoji = '☀️';
+
+        const fecha = d.fecha || '';
+        const dayNum = fecha.slice(8, 10);
+        const month = fecha.slice(5, 7);
+
+        return `<div class="ext-day${conf}" style="border-top: 3px solid ${color}" onclick="goToForecastDay('${fecha}')">
+            ${confBadge}
+            <div class="ext-day-name">${d.dia}</div>
+            <div class="ext-day-date">${dayNum}/${month}</div>
+            <div class="ext-day-emoji">${emoji}</div>
+            <div class="ext-day-score" style="color: ${color}">${d.score}</div>
+            <div class="ext-day-label" style="color: ${color}">${d.label}</div>
+            <div class="ext-day-details">
+                <span style="color:${windColor(d.viento_max_kn)}">${knToDisplay(d.viento_max_kn)} ${windLabel()}</span>
+                <span style="color:${swellColor(d.ola_max)}">${d.ola_max != null ? d.ola_max.toFixed(1) + 'm' : '--'}</span><br>
+                <span style="color:${rainColor(d.prob_precipitacion)}">${d.prob_precipitacion ?? '--'}%</span>
+                ${d.temp_min != null ? `<span style="color:${tempColor(d.temp_min)}">${Math.round(d.temp_min)}°/${Math.round(d.temp_max)}°</span>` : ''}
+            </div>
+        </div>`;
+    }).join('');
 }
 
 // ─── Tides ───────────────────────────────────────────────────────────────────

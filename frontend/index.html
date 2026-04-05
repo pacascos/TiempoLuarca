@@ -10,7 +10,7 @@
         const basePath = window.location.pathname.endsWith('/') ? window.location.pathname : window.location.pathname + '/';
         window.__BASE = basePath;
     </script>
-    <link rel="stylesheet" href="static/styles.css?v=41">
+    <link rel="stylesheet" href="static/styles.css?v=42">
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/weather-icons/2.0.12/css/weather-icons.min.css">
     <link rel="preconnect" href="https://fonts.googleapis.com">
     <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800;900&display=swap" rel="stylesheet">
@@ -210,6 +210,14 @@
             </div>
         </section>
 
+        <!-- Prevision extendida 16 dias -->
+        <section class="extended-section">
+            <h2>Proximos 16 dias</h2>
+            <div class="extended-container" id="extendedContainer">
+                <p class="loading">Cargando prevision extendida...</p>
+            </div>
+        </section>
+
         <!-- Mareas -->
         <section class="tides-section">
             <h2>Mareas</h2>
@@ -349,6 +357,6 @@
         <p>TiempoLuarca &middot; Datos: AEMET (Cabo Busto), Open-Meteo, IHM</p>
     </footer>
 
-    <script src="static/app.js?v=41"></script>
+    <script src="static/app.js?v=42"></script>
 </body>
 </html>
