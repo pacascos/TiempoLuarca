@@ -5,6 +5,7 @@ Base de datos SQLite para históricos y feedback.
 import sqlite3
 import json
 import os
+import hashlib
 from datetime import datetime
 from backend.config import DATABASE_PATH
 
@@ -95,6 +96,14 @@ def init_db():
         CREATE INDEX IF NOT EXISTS idx_forecast_date ON forecast_history(target_date);
         CREATE INDEX IF NOT EXISTS idx_hourly_timestamp ON hourly_history(timestamp);
         CREATE INDEX IF NOT EXISTS idx_feedback_date ON feedback(date);
+
+        CREATE TABLE IF NOT EXISTS page_views (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            user_hash TEXT NOT NULL,
+            timestamp TEXT DEFAULT (datetime('now'))
+        );
+        CREATE INDEX IF NOT EXISTS idx_pv_user ON page_views(user_hash);
+        CREATE INDEX IF NOT EXISTS idx_pv_ts ON page_views(timestamp);
     """)
     conn.commit()
     conn.close()
@@ -228,6 +237,43 @@ def get_feedback_list(limit: int = 50) -> list[dict]:
     ).fetchall()
     conn.close()
     return [dict(r) for r in rows]
+
+
+def save_page_view(ip: str):
+    """Registra una visita usando hash de IP (anónimo)."""
+    user_hash = hashlib.sha256(ip.encode()).hexdigest()[:12]
+    conn = get_db()
+    conn.execute("INSERT INTO page_views (user_hash) VALUES (?)", (user_hash,))
+    conn.commit()
+    conn.close()
+
+
+def get_usage_stats() -> dict:
+    """Devuelve estadísticas de uso."""
+    conn = get_db()
+    # Total de usuarios únicos y visitas
+    totals = conn.execute(
+        "SELECT COUNT(DISTINCT user_hash) as users, COUNT(*) as views FROM page_views"
+    ).fetchone()
+    # Visitas por día (últimos 30 días)
+    daily = conn.execute(
+        """SELECT DATE(timestamp) as dia, COUNT(DISTINCT user_hash) as usuarios, COUNT(*) as visitas
+           FROM page_views WHERE timestamp >= datetime('now', '-30 days')
+           GROUP BY dia ORDER BY dia"""
+    ).fetchall()
+    # Top usuarios por frecuencia
+    top_users = conn.execute(
+        """SELECT user_hash, COUNT(*) as visitas,
+                  MIN(timestamp) as primera, MAX(timestamp) as ultima
+           FROM page_views GROUP BY user_hash ORDER BY visitas DESC LIMIT 20"""
+    ).fetchall()
+    conn.close()
+    return {
+        "total_usuarios": totals["users"],
+        "total_visitas": totals["views"],
+        "diario": [dict(r) for r in daily],
+        "usuarios": [dict(r) for r in top_users],
+    }
 
 
 def get_history(days: int = 30) -> list[dict]:

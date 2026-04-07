@@ -20,7 +20,7 @@ from backend.data_sources import (
     get_open_meteo_extended,
 )
 from backend.scoring import ScoringInput, calculate_score, score_forecast_hour
-from backend.database import init_db, save_snapshot, save_hourly_batch, save_feedback, get_feedback_list, get_history
+from backend.database import init_db, save_snapshot, save_hourly_batch, save_feedback, get_feedback_list, get_history, save_page_view, get_usage_stats
 
 logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
@@ -218,8 +218,20 @@ app.mount("/static", StaticFiles(directory="frontend"), name="static")
 # ─── Frontend ─────────────────────────────────────────────────────────────────
 
 @app.get("/", response_class=HTMLResponse)
-async def index():
+async def index(request: Request):
+    ip = request.client.host if request.client else "unknown"
+    save_page_view(ip)
     return FileResponse("frontend/index.html")
+
+
+@app.get("/uso", response_class=HTMLResponse)
+async def usage_page():
+    return FileResponse("frontend/usage.html")
+
+
+@app.get("/api/usage")
+async def api_usage():
+    return get_usage_stats()
 
 
 # ─── API Endpoints ────────────────────────────────────────────────────────────
