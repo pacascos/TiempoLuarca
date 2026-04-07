@@ -197,6 +197,11 @@ async def get_aemet_prediccion_playa() -> list | None:
     )
     if not data or not isinstance(data, list):
         return None
+    def _safe_get(obj, key):
+        """Extrae valor de un dict AEMET, tolerando campos que vengan como int."""
+        v = obj.get(key)
+        return v if isinstance(v, dict) else {}
+
     result = []
     for entry in data:
         pred = entry.get("prediccion", {})
@@ -204,12 +209,12 @@ async def get_aemet_prediccion_playa() -> list | None:
         for dia in dia_data:
             result.append({
                 "fecha": dia.get("fecha", "")[:10],
-                "estado_cielo": dia.get("estadoCielo", {}).get("descripcion1", ""),
-                "viento": dia.get("viento", {}).get("descripcion1", ""),
-                "oleaje": dia.get("oleaje", {}).get("descripcion1", ""),
-                "t_max": dia.get("tMaxima", {}).get("valor1"),
-                "uv": dia.get("uvMax", {}).get("valor1"),
-                "t_agua": dia.get("tAgua", {}).get("valor1"),
+                "estado_cielo": _safe_get(dia, "estadoCielo").get("descripcion1", ""),
+                "viento": _safe_get(dia, "viento").get("descripcion1", ""),
+                "oleaje": _safe_get(dia, "oleaje").get("descripcion1", ""),
+                "t_max": _safe_get(dia, "tMaxima").get("valor1"),
+                "uv": _safe_get(dia, "uvMax").get("valor1"),
+                "t_agua": _safe_get(dia, "tAgua").get("valor1"),
                 "fuente": "AEMET Playa Luarca",
             })
     return result
