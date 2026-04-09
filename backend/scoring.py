@@ -428,22 +428,46 @@ def calculate_score(inp: ScoringInput) -> ScoringResult:
 
     score = max(1, min(10, round(weighted)))
 
-    # Reglas de seguridad
-    if min(sv, so, sr) <= 2:
+    # Reglas de seguridad: factores críticos (viento, oleaje, rachas)
+    # Un solo factor extremo ya debe hundir el score
+    worst_critical = min(sv, so, sr)
+    if worst_critical <= 1:
+        score = min(score, 2)
+    elif worst_critical <= 2:
+        score = min(score, 3)
+    elif worst_critical <= 3:
         score = min(score, 4)
-    if min(sv, so) <= 3:
-        score = min(score, 5)
-    if so <= 3:
-        score = min(score, 5)
+
+    # Oleaje es especialmente importante para un barco de 6.5m
+    if so <= 1:
+        score = min(score, 2)
+    elif so <= 2:
+        score = min(score, 3)
+    elif so <= 3:
+        score = min(score, 4)
     elif so <= 4:
         score = min(score, 5)
     elif so <= 5:
         score = min(score, 6)
-    if sr <= 3:
-        score = min(score, 5)
+
+    # Viento y rachas
+    if sv <= 1:
+        score = min(score, 2)
+    elif sv <= 2:
+        score = min(score, 3)
+    if sr <= 1:
+        score = min(score, 2)
+    elif sr <= 2:
+        score = min(score, 3)
+    elif sr <= 3:
+        score = min(score, 4)
+
+    # Visibilidad y presión
     if svis <= 2:
         score = min(score, 4)
-    if spres <= 3:
+    if spres <= 2:
+        score = min(score, 4)
+    elif spres <= 3:
         score = min(score, 5)
 
     # Lluvia muy alta limita el score (no es seguridad pero arruina la salida)
@@ -454,9 +478,9 @@ def calculate_score(inp: ScoringInput) -> ScoringResult:
     # (no cuenta temperatura ni nubosidad que son confort)
     bad_count = sum(1 for s in [sv, so, sl, svis, sr] if s <= 4)
     if bad_count >= 4:
-        score = min(score, 3)
+        score = min(score, 2)
     elif bad_count >= 3:
-        score = min(score, 4)
+        score = min(score, 3)
 
     label, color, recomendacion = LABELS[score]
 
