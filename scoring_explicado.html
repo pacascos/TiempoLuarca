@@ -1,0 +1,333 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Scoring TiempoLuarca - Explicacion detallada</title>
+<style>
+  * { margin: 0; padding: 0; box-sizing: border-box; }
+  body { font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif; background: #0a1628; color: #e0e0e0; padding: 20px; max-width: 1400px; margin: 0 auto; line-height: 1.5; }
+  h1 { color: #fff; margin-bottom: 8px; font-size: 1.8em; }
+  h2 { color: #90caf9; margin: 30px 0 15px; font-size: 1.3em; border-bottom: 1px solid #1e3a5f; padding-bottom: 8px; }
+  h3 { color: #bbdefb; margin: 20px 0 10px; font-size: 1.1em; }
+  .subtitle { color: #78909c; margin-bottom: 25px; }
+  p, li { margin: 5px 0; color: #b0bec5; }
+
+  .score-badge { display: inline-flex; align-items: center; justify-content: center; width: 48px; height: 48px; border-radius: 10px; font-size: 1.5em; font-weight: 700; color: #000; flex-shrink: 0; }
+
+  .scale-grid { display: grid; grid-template-columns: 60px 120px 1fr; gap: 6px 12px; align-items: center; margin: 15px 0; }
+
+  .flow { display: flex; flex-direction: column; gap: 8px; margin: 15px 0; }
+  .flow-step { background: #132238; border-radius: 8px; padding: 12px 16px; display: flex; align-items: center; gap: 12px; }
+  .flow-step .num { background: #1976d2; color: #fff; width: 28px; height: 28px; border-radius: 50%; display: flex; align-items: center; justify-content: center; font-weight: 700; font-size: 0.85em; flex-shrink: 0; }
+
+  .weights-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(200px, 1fr)); gap: 10px; margin: 15px 0; }
+  .weight-card { background: #132238; border-radius: 8px; padding: 12px; }
+  .weight-card .pct { color: #64b5f6; font-size: 1.2em; font-weight: 700; }
+  .weight-card .name { font-weight: 600; color: #fff; }
+  .weight-card.crit { border-left: 4px solid #f44336; }
+  .weight-card.sec { border-left: 4px solid #ff9800; }
+  .weight-card.comf { border-left: 4px solid #4caf50; }
+
+  .factor-table { width: 100%; border-collapse: collapse; margin: 10px 0 20px; font-size: 0.9em; }
+  .factor-table th { background: #1a2d47; color: #90caf9; padding: 8px 12px; text-align: left; }
+  .factor-table td { padding: 6px 12px; border-bottom: 1px solid #1e2d3d; }
+  .factor-table .range { color: #fff; font-weight: 500; }
+
+  .rules-list { list-style: none; margin: 10px 0; }
+  .rules-list li { padding: 8px 12px; margin: 4px 0; background: #132238; border-radius: 6px; font-size: 0.9em; border-left: 3px solid #f44336; }
+  .rules-list li.warn { border-left-color: #ff9800; }
+  .rules-list li.info { border-left-color: #2196f3; }
+
+  /* ── Scenarios ── */
+  .scenario { background: #0f1e33; border-radius: 12px; padding: 20px; margin: 18px 0; border: 1px solid #1e3a5f; }
+  .sc-header { display: flex; align-items: center; gap: 15px; margin-bottom: 5px; }
+  .sc-name { font-size: 1.15em; font-weight: 700; color: #fff; }
+  .sc-desc { color: #78909c; font-size: 0.9em; }
+  .sc-label { font-weight: 600; }
+  .sc-rec { color: #607d8b; font-size: 0.85em; margin-top: 2px; font-style: italic; }
+
+  .sc-body { display: grid; grid-template-columns: 1fr 1fr; gap: 12px; margin-top: 14px; }
+  .sc-panel { background: #132238; border-radius: 8px; padding: 14px; }
+  .sc-panel h4 { color: #64b5f6; font-size: 0.8em; text-transform: uppercase; letter-spacing: 0.5px; margin-bottom: 8px; }
+
+  .sc-verbose { grid-column: 1 / -1; }
+
+  .step-line { display: flex; gap: 8px; padding: 4px 0; font-size: 0.88em; font-family: 'SF Mono', 'Fira Code', monospace; }
+  .step-line .arrow { color: #546e7a; }
+  .step-result { color: #fff; font-weight: 600; }
+
+  .safety-line { display: flex; align-items: center; gap: 8px; padding: 5px 10px; margin: 3px 0; border-radius: 4px; font-size: 0.85em; }
+  .safety-line.red { background: #2d1515; border-left: 3px solid #f44336; }
+  .safety-line.orange { background: #2d2215; border-left: 3px solid #ff9800; }
+  .safety-line.blue { background: #152233; border-left: 3px solid #2196f3; }
+
+  .weighted-box { background: #1a2d47; border-radius: 6px; padding: 10px 14px; margin: 8px 0; display: flex; align-items: center; gap: 12px; }
+  .weighted-box .calc { font-family: 'SF Mono', monospace; font-size: 0.85em; color: #90caf9; }
+  .weighted-box .result { font-size: 1.1em; font-weight: 700; color: #fff; }
+
+  .final-box { background: #0a1628; border: 2px solid; border-radius: 8px; padding: 10px 14px; margin-top: 8px; display: flex; align-items: center; gap: 12px; }
+  .final-box .text { font-weight: 600; }
+
+  .bar-wrap { display: flex; align-items: center; gap: 8px; padding: 2px 0; }
+  .bar-label { width: 75px; font-size: 0.85em; color: #78909c; }
+  .bar { height: 14px; border-radius: 3px; min-width: 4px; }
+  .bar-val { font-size: 0.85em; font-weight: 600; width: 20px; text-align: right; }
+
+  .detail-row { display: flex; justify-content: space-between; padding: 3px 0; font-size: 0.88em; }
+  .detail-row .key { color: #78909c; }
+  .detail-row .val { color: #fff; font-weight: 500; }
+
+  @media (max-width: 700px) {
+    .sc-body { grid-template-columns: 1fr; }
+    .sc-verbose { grid-column: 1; }
+    .weights-grid { grid-template-columns: 1fr 1fr; }
+  }
+</style>
+</head>
+<body>
+
+<h1>Sistema de Scoring - TiempoLuarca</h1>
+<p class="subtitle">Puntuacion nautica 1-10 para Beneteau Antares 6.5 en el Cantabrico &mdash; explicacion detallada con modo verbose</p>
+
+<!-- ── ESCALA ── -->
+<h2>Escala de puntuacion</h2>
+<div class="scale-grid" id="scaleGrid"></div>
+
+<!-- ── FLUJO ── -->
+<h2>Como se calcula el score final</h2>
+<div class="flow">
+  <div class="flow-step"><div class="num">1</div><div><b>Evaluar cada factor</b> por separado (viento, oleaje, lluvia...) &rarr; score individual 1-10</div></div>
+  <div class="flow-step"><div class="num">2</div><div><b>Media ponderada</b> de todos los factores segun sus pesos &rarr; score base</div></div>
+  <div class="flow-step"><div class="num">3</div><div><b>Reglas de seguridad</b>: limitan el score final cuando hay factores criticos bajos. Un solo factor peligroso puede hundir el score aunque el resto sea perfecto. <b>Estas reglas son las que realmente mandan.</b></div></div>
+</div>
+
+<!-- ── PESOS ── -->
+<h2>Pesos en la media ponderada</h2>
+<p>Los factores criticos (viento, oleaje, rachas) suman el 55% del peso <b>y ademas</b> tienen reglas de seguridad que limitan el score independientemente de la media.</p>
+<div class="weights-grid" id="weightsGrid"></div>
+
+<!-- ── ESCALAS ── -->
+<h2>Escalas individuales de cada factor</h2>
+
+<h3>Oleaje: swell (mar de fondo)</h3>
+<p>El factor mas importante. En el Cantabrico un buen dia tiene 0.5-0.8m. Con 1.5m ya botas bastante y con 2m+ no se sale.</p>
+<table class="factor-table">
+  <tr><th>Swell</th><th>Score</th><th>Sensacion en un 6.5m</th></tr>
+  <tr><td class="range">&le; 0.3m</td><td>10</td><td>Mar plana</td></tr>
+  <tr><td class="range">&le; 0.5m</td><td>9</td><td>Calma total</td></tr>
+  <tr><td class="range">&le; 0.7m</td><td>8</td><td>Muy suave</td></tr>
+  <tr><td class="range">&le; 0.9m</td><td>7</td><td>Se nota algo de movimiento</td></tr>
+  <tr><td class="range">&le; 1.1m</td><td>6</td><td>Moderado, hay que sujetarse a ratos</td></tr>
+  <tr><td class="range">&le; 1.3m</td><td>5</td><td>Notable, inclinacion constante</td></tr>
+  <tr><td class="range">&le; 1.5m</td><td>4</td><td>Incomodo, sujecion permanente</td></tr>
+  <tr><td class="range">&le; 1.8m</td><td>3</td><td>Fuerte, riesgo real</td></tr>
+  <tr><td class="range">&le; 2.2m</td><td>2</td><td>Muy peligroso para este barco</td></tr>
+  <tr><td class="range">&gt; 2.2m</td><td>1</td><td>Extremo, ola casi tan alta como el barco</td></tr>
+</table>
+<p style="color:#78909c;font-size:0.85em">Ajuste por periodo: &gt;12s y swell &lt;2m &rarr; +1 (ola larga). &lt;7s &rarr; -1 (ola corta y abrupta).</p>
+
+<h3>Oleaje: chop (mar de viento)</h3>
+<table class="factor-table">
+  <tr><th>Chop</th><th>Score</th><th>Sensacion</th></tr>
+  <tr><td class="range">&le; 0.1m</td><td>10</td><td>Nada</td></tr>
+  <tr><td class="range">&le; 0.25m</td><td>8-9</td><td>Ligero</td></tr>
+  <tr><td class="range">&le; 0.4m</td><td>7</td><td>Se nota</td></tr>
+  <tr><td class="range">&le; 0.5m</td><td>5</td><td>Incomodo, pantocazos</td></tr>
+  <tr><td class="range">&le; 0.7m</td><td>4</td><td>Muy incomodo</td></tr>
+  <tr><td class="range">&le; 1.0m</td><td>3</td><td>Peligroso</td></tr>
+  <tr><td class="range">&gt; 1.3m</td><td>1</td><td>Extremo</td></tr>
+</table>
+
+<h3>Combinacion oleaje = swell + chop</h3>
+<ul class="rules-list">
+  <li><b>Si el peor componente es &le; 2</b>: oleaje = ese valor directamente. Un swell de 4m no mejora porque no haya chop.</li>
+  <li class="warn">Si ambos &gt; 2: oleaje = peor &times; 0.75 + mejor &times; 0.25</li>
+</ul>
+
+<h3>Viento sostenido</h3>
+<table class="factor-table">
+  <tr><th>Nudos</th><th>Score</th><th></th></tr>
+  <tr><td class="range">&le; 5</td><td>10</td><td>Calma</td></tr>
+  <tr><td class="range">&le; 10</td><td>8-9</td><td>Brisa leve</td></tr>
+  <tr><td class="range">&le; 15</td><td>6-7</td><td>Brisa moderada</td></tr>
+  <tr><td class="range">&le; 20</td><td>4-5</td><td>Brisa fuerte</td></tr>
+  <tr><td class="range">&le; 25</td><td>3</td><td>Viento fuerte</td></tr>
+  <tr><td class="range">&le; 30</td><td>2</td><td>Temporal</td></tr>
+  <tr><td class="range">&gt; 30</td><td>1</td><td>Temporal duro</td></tr>
+</table>
+
+<h3>Rachas, lluvia, visibilidad, presion, temperatura</h3>
+<table class="factor-table">
+  <tr><th>Factor</th><th>Score 10 (ideal)</th><th>Score 5</th><th>Score 1 (peligroso)</th></tr>
+  <tr><td class="range">Rachas</td><td>&le; 10 kn</td><td>28 kn</td><td>&gt; 40 kn</td></tr>
+  <tr><td class="range">Lluvia</td><td>0% prob.</td><td>&sim;75%</td><td>100% + &ge;5mm/h</td></tr>
+  <tr><td class="range">Visibilidad</td><td>&ge; 20 km</td><td>3 km</td><td>&lt; 500m (niebla)</td></tr>
+  <tr><td class="range">Nubosidad</td><td>&le; 10%</td><td>55-65%</td><td>&gt; 95%</td></tr>
+  <tr><td class="range">Presion (6h)</td><td>Subiendo +1</td><td>Bajando -3</td><td>Desplome &lt; -5</td></tr>
+  <tr><td class="range">Temperatura</td><td>&ge; 22°C</td><td>12°C</td><td>&lt; 5°C</td></tr>
+</table>
+
+<!-- ── REGLAS SEGURIDAD ── -->
+<h2>Reglas de seguridad (las que realmente mandan)</h2>
+<p>Despues de la media ponderada, estas reglas <b>limitan el score maximo final</b>. Sin ellas, un dia con olas de 4m y sol daria un 7.</p>
+
+<h3>Factores criticos (viento, oleaje, rachas)</h3>
+<ul class="rules-list">
+  <li><b>2+ factores criticos en 1</b> &rarr; score = <b>1</b></li>
+  <li><b>1 factor en 1 + otro critico &le; 3</b> &rarr; score = <b>1</b> (ej: olas enormes + rachas fuertes)</li>
+  <li><b>1 factor en 1 (resto OK)</b> &rarr; score &le; <b>2</b> (ej: solo swell grande)</li>
+  <li class="warn"><b>Peor critico = 2</b> &rarr; score &le; 3</li>
+  <li class="warn"><b>Peor critico = 3</b> &rarr; score &le; 4</li>
+</ul>
+
+<h3>Oleaje como limitador especifico</h3>
+<ul class="rules-list">
+  <li>Oleaje = 1 &rarr; score &le; 2 &nbsp;|&nbsp; Oleaje = 2 &rarr; score &le; 3 &nbsp;|&nbsp; Oleaje = 3 &rarr; score &le; 4</li>
+  <li class="warn">Oleaje = 4 &rarr; score &le; 5 &nbsp;|&nbsp; Oleaje = 5 &rarr; score &le; 6 &nbsp;|&nbsp; Oleaje = 6 &rarr; score &le; 7</li>
+</ul>
+
+<h3>Otros limitadores</h3>
+<ul class="rules-list">
+  <li class="warn">Visibilidad &le; 2 &rarr; &le; 4 &nbsp;|&nbsp; Presion &le; 2 &rarr; &le; 4 &nbsp;|&nbsp; Lluvia &le; 2 &rarr; &le; 5</li>
+  <li class="info">4+ factores malos (&le;4) a la vez &rarr; score &le; 2</li>
+  <li class="info">3 factores malos (&le;4) a la vez &rarr; score &le; 3</li>
+</ul>
+
+<!-- ── ESCENARIOS VERBOSE ── -->
+<h2>Escenarios con desglose completo (modo verbose)</h2>
+<p>Para cada escenario: datos de entrada &rarr; score de cada factor &rarr; media ponderada &rarr; reglas de seguridad aplicadas &rarr; score final.</p>
+<div id="scenarios"></div>
+
+<script>
+const SCALE = [
+  {s:10, l:"Perfecto",      c:"#00C853", r:"Condiciones ideales para navegar"},
+  {s:9,  l:"Excelente",     c:"#64DD17", r:"Condiciones excelentes"},
+  {s:8,  l:"Muy bueno",     c:"#AEEA00", r:"Navegacion comoda"},
+  {s:7,  l:"Bueno",         c:"#FFD600", r:"Alguna ola pequena"},
+  {s:6,  l:"Aceptable",     c:"#FFAB00", r:"Navega con atencion"},
+  {s:5,  l:"Regular",       c:"#FF6D00", r:"Solo con experiencia"},
+  {s:4,  l:"Malo",          c:"#FF3D00", r:"Mejor quedarse en puerto"},
+  {s:3,  l:"Muy malo",      c:"#E53935", r:"No se recomienda salir"},
+  {s:2,  l:"Peligroso",     c:"#F44336", r:"No salir"},
+  {s:1,  l:"Muy peligroso", c:"#EF5350", r:"Prohibido navegar"},
+];
+
+function sc(v) { return SCALE.find(x => x.s === v) || {c:'#666',l:'?'}; }
+
+// Scale grid
+const sg = document.getElementById('scaleGrid');
+SCALE.forEach(s => {
+  sg.innerHTML += `<div class="score-badge" style="background:${s.c}">${s.s}</div><div style="font-weight:600">${s.l}</div><div style="color:#90a4ae;font-size:0.9em">${s.r}</div>`;
+});
+
+// Weights
+const W = [
+  {n:"Viento",pct:23,t:"crit"},{n:"Oleaje",pct:23,t:"crit"},{n:"Rachas",pct:9,t:"crit"},
+  {n:"Lluvia",pct:9,t:"sec"},{n:"Visibilidad",pct:7,t:"sec"},{n:"Presion",pct:6,t:"sec"},
+  {n:"Temperatura",pct:6,t:"comf"},{n:"Nubosidad",pct:5,t:"comf"},
+  {n:"Confort (comp.)",pct:6,t:"comf"},{n:"Estabilidad (comp.)",pct:6,t:"sec"},
+];
+const wg = document.getElementById('weightsGrid');
+W.forEach(w => {
+  const label = w.t==='crit'?'Critico + reglas seguridad':w.t==='sec'?'Seguridad/entorno':'Confort';
+  wg.innerHTML += `<div class="weight-card ${w.t}"><div class="pct">${w.pct}%</div><div class="name">${w.n}</div><div style="color:#78909c;font-size:0.8em">${label}</div></div>`;
+});
+
+// Scenarios data (generated from actual scoring engine)
+const DATA = [{"name":"Dia perfecto de verano","desc":"Mar plana, sin viento, sol radiante","inputs":{"viento_nudos":3,"racha_nudos":5,"swell_altura":0.3,"swell_periodo":12,"viento_ola_altura":0.05,"viento_ola_periodo":6,"prob_precipitacion":0,"visibilidad_m":25000,"nubosidad":5,"temperatura":24,"presion_trend_6h":1},"score":10,"label":"Perfecto","color":"#00C853","rec":"Condiciones ideales para navegar. A disfrutar!","scores":{"viento":10,"oleaje":10,"racha":10,"lluvia":10,"visibilidad":10,"nubosidad":10,"presion":10,"temperatura":10},"weighted":10.0,"weighted_round":10,"steps":["Viento 3 kn → score 10","Rachas 5 kn → score 10","Swell 0.3m → oleaje combinado = 10","Lluvia 0% → score 10","Visibilidad 25000m → score 10","Nubosidad 5% → score 10","Presion tend. 1 hPa/6h → score 10","Temperatura 24°C → score 10","Confort (lluvia+nubes+temp)/3 = 10","Estabilidad (presion+visib)/2 = 10","Media ponderada = 10.00 → redondeado = 10"],"safety":[]},{"name":"Buen dia tipico cantabrico","desc":"Algo de swell, brisa suave, nubes parciales","inputs":{"viento_nudos":8,"racha_nudos":14,"swell_altura":0.6,"swell_periodo":10,"viento_ola_altura":0.15,"viento_ola_periodo":5,"prob_precipitacion":10,"visibilidad_m":18000,"nubosidad":30,"temperatura":20,"presion_trend_6h":0},"score":9,"label":"Excelente","color":"#64DD17","rec":"Condiciones excelentes. Mar en calma.","scores":{"viento":9,"oleaje":8,"racha":9,"lluvia":9,"visibilidad":9,"nubosidad":8,"presion":9,"temperatura":9},"weighted":8.72,"weighted_round":9,"steps":["Viento 8 kn → score 9","Rachas 14 kn → score 9","Swell 0.6m → oleaje combinado = 8","Lluvia 10% → score 9","Visibilidad 18000m → score 9","Nubosidad 30% → score 8","Presion tend. 0 hPa/6h → score 9","Temperatura 20°C → score 9","Confort (lluvia+nubes+temp)/3 = 9","Estabilidad (presion+visib)/2 = 9","Media ponderada = 8.72 → redondeado = 9"],"safety":[]},{"name":"Dia aceptable","desc":"Swell 1m, viento 12kn, algo de nubes","inputs":{"viento_nudos":12,"racha_nudos":20,"swell_altura":1.0,"swell_periodo":9,"viento_ola_altura":0.3,"viento_ola_periodo":4,"prob_precipitacion":25,"visibilidad_m":12000,"nubosidad":50,"temperatura":17,"presion_trend_6h":-1},"score":7,"label":"Bueno","color":"#FFD600","rec":"Buenas condiciones. Alguna ola pequena.","scores":{"viento":7,"oleaje":6,"racha":7,"lluvia":8,"visibilidad":8,"nubosidad":6,"presion":9,"temperatura":7},"weighted":7.06,"weighted_round":7,"steps":["Viento 12 kn → score 7","Rachas 20 kn → score 7","Swell 1.0m → oleaje combinado = 6","Lluvia 25% → score 8","Visibilidad 12000m → score 8","Nubosidad 50% → score 6","Presion tend. -1 hPa/6h → score 9","Temperatura 17°C → score 7","Confort (lluvia+nubes+temp)/3 = 7","Estabilidad (presion+visib)/2 = 8","Media ponderada = 7.06 → redondeado = 7"],"safety":["Oleaje = 6 → score ≤ 7"]},{"name":"Swell 1.5m sin viento","desc":"Mar de fondo pero calma total de viento","inputs":{"viento_nudos":5,"racha_nudos":8,"swell_altura":1.5,"swell_periodo":10,"viento_ola_altura":0.1,"viento_ola_periodo":5,"prob_precipitacion":10,"visibilidad_m":20000,"nubosidad":20,"temperatura":20,"presion_trend_6h":0},"score":7,"label":"Bueno","color":"#FFD600","rec":"Buenas condiciones. Alguna ola pequena.","scores":{"viento":10,"oleaje":6,"racha":10,"lluvia":9,"visibilidad":10,"nubosidad":9,"presion":9,"temperatura":9},"weighted":8.76,"weighted_round":9,"steps":["Viento 5 kn → score 10","Rachas 8 kn → score 10","Swell 1.5m → oleaje combinado = 6","Lluvia 10% → score 9","Visibilidad 20000m → score 10","Nubosidad 20% → score 9","Presion tend. 0 hPa/6h → score 9","Temperatura 20°C → score 9","Confort (lluvia+nubes+temp)/3 = 9","Estabilidad (presion+visib)/2 = 10","Media ponderada = 8.76 → redondeado = 9"],"safety":["Oleaje = 6 → score ≤ 7"]},{"name":"Swell 2m + viento 15kn","desc":"Mar gruesa con viento, condiciones malas","inputs":{"viento_nudos":15,"racha_nudos":25,"swell_altura":2.0,"swell_periodo":9,"viento_ola_altura":0.5,"viento_ola_periodo":4,"prob_precipitacion":50,"visibilidad_m":8000,"nubosidad":70,"temperatura":14,"presion_trend_6h":-3},"score":3,"label":"Muy malo","color":"#E53935","rec":"Condiciones muy malas. No se recomienda salir.","scores":{"viento":6,"oleaje":2,"racha":6,"lluvia":6,"visibilidad":7,"nubosidad":4,"presion":5,"temperatura":6},"weighted":4.93,"weighted_round":5,"steps":["Viento 15 kn → score 6","Rachas 25 kn → score 6","Swell 2.0m → oleaje combinado = 2","Lluvia 50% → score 6","Visibilidad 8000m → score 7","Nubosidad 70% → score 4","Presion tend. -3 hPa/6h → score 5","Temperatura 14°C → score 6","Confort (lluvia+nubes+temp)/3 = 5","Estabilidad (presion+visib)/2 = 6","Media ponderada = 4.93 → redondeado = 5"],"safety":["Peor critico = 2 → score ≤ 3","Oleaje = 2 → score ≤ 3"]},{"name":"Vie 10 Abr (real)","desc":"Swell 2.88m pero viento flojo y sin lluvia","inputs":{"viento_nudos":6.9,"racha_nudos":13.4,"swell_altura":2.88,"viento_ola_altura":0.5,"swell_periodo":10,"viento_ola_periodo":5,"ola_altura":3.02,"ola_periodo":10,"prob_precipitacion":0,"visibilidad_m":20000,"nubosidad":30,"temperatura":15,"presion_trend_6h":0},"score":2,"label":"Peligroso","color":"#F44336","rec":"Condiciones peligrosas. No salir.","scores":{"viento":9,"oleaje":1,"racha":9,"lluvia":10,"visibilidad":10,"nubosidad":8,"presion":9,"temperatura":6},"weighted":7.09,"weighted_round":7,"steps":["Viento 6.9 kn → score 9","Rachas 13.4 kn → score 9","Swell 2.88m → oleaje combinado = 1","Lluvia 0% → score 10","Visibilidad 20000m → score 10","Nubosidad 30% → score 8","Presion tend. 0 hPa/6h → score 9","Temperatura 15°C → score 6","Confort (lluvia+nubes+temp)/3 = 8","Estabilidad (presion+visib)/2 = 10","Media ponderada = 7.09 → redondeado = 7"],"safety":["1 critico en 1 (v=9,o=1,r=9) → score ≤ 2","Oleaje = 1 → score ≤ 2"]},{"name":"Sab 11 Abr (real)","desc":"Swell 3.78m + rachas 33kn + lluvia 93%","inputs":{"viento_nudos":15.2,"racha_nudos":32.7,"swell_altura":3.78,"viento_ola_altura":0.8,"swell_periodo":9,"viento_ola_periodo":4,"ola_altura":3.78,"ola_periodo":9,"prob_precipitacion":93,"precipitacion_mm":4.0,"visibilidad_m":8000,"nubosidad":90,"temperatura":13,"presion_trend_6h":-4},"score":1,"label":"Muy peligroso","color":"#EF5350","rec":"Condiciones extremas. Prohibido navegar.","scores":{"viento":5,"oleaje":1,"racha":3,"lluvia":3,"visibilidad":7,"nubosidad":2,"presion":3,"temperatura":5},"weighted":3.47,"weighted_round":3,"steps":["Viento 15.2 kn → score 5","Rachas 32.7 kn → score 3","Swell 3.78m → oleaje combinado = 1","Lluvia 93% + 4.0mm/h → score 3","Visibilidad 8000m → score 7","Nubosidad 90% → score 2","Presion tend. -4 hPa/6h → score 3","Temperatura 13°C → score 5","Confort (lluvia+nubes+temp)/3 = 3","Estabilidad (presion+visib)/2 = 5","Media ponderada = 3.47 → redondeado = 3"],"safety":["1 critico en 1 + otro ≤3 (v=5,o=1,r=3) → score = 1","Oleaje = 1 → score ≤ 2","Rachas = 3 → score ≤ 4","Presion = 3 → score ≤ 5","3 factores ≤ 4 → score ≤ 3"]},{"name":"Dom 12 Abr (real)","desc":"Swell 4.44m con viento moderado","inputs":{"viento_nudos":11.5,"racha_nudos":21.8,"swell_altura":4.44,"viento_ola_altura":0.5,"swell_periodo":10,"viento_ola_periodo":5,"ola_altura":4.48,"ola_periodo":10,"prob_precipitacion":36,"visibilidad_m":12000,"nubosidad":60,"temperatura":14,"presion_trend_6h":-2},"score":2,"label":"Peligroso","color":"#F44336","rec":"Condiciones peligrosas. No salir.","scores":{"viento":7,"oleaje":1,"racha":7,"lluvia":7,"visibilidad":8,"nubosidad":5,"presion":7,"temperatura":6},"weighted":5.53,"weighted_round":6,"steps":["Viento 11.5 kn → score 7","Rachas 21.8 kn → score 7","Swell 4.44m → oleaje combinado = 1","Lluvia 36% → score 7","Visibilidad 12000m → score 8","Nubosidad 60% → score 5","Presion tend. -2 hPa/6h → score 7","Temperatura 14°C → score 6","Confort (lluvia+nubes+temp)/3 = 6","Estabilidad (presion+visib)/2 = 8","Media ponderada = 5.53 → redondeado = 6"],"safety":["1 critico en 1 (v=7,o=1,r=7) → score ≤ 2","Oleaje = 1 → score ≤ 2"]},{"name":"Temporal noroeste","desc":"Olas 4.5m + viento 30kn + rachas 42kn","inputs":{"viento_nudos":30,"racha_nudos":42,"swell_altura":4.5,"swell_periodo":9,"viento_ola_altura":1.0,"viento_ola_periodo":5,"ola_altura":4.5,"ola_periodo":9,"prob_precipitacion":85,"visibilidad_m":3000,"nubosidad":95,"temperatura":10,"presion_trend_6h":-5},"score":1,"label":"Muy peligroso","color":"#EF5350","rec":"Condiciones extremas. Prohibido navegar.","scores":{"viento":2,"oleaje":1,"racha":1,"lluvia":4,"visibilidad":5,"nubosidad":2,"presion":3,"temperatura":4},"weighted":2.43,"weighted_round":2,"steps":["Viento 30 kn → score 2","Rachas 42 kn → score 1","Swell 4.5m → oleaje combinado = 1","Lluvia 85% → score 4","Visibilidad 3000m → score 5","Nubosidad 95% → score 2","Presion tend. -5 hPa/6h → score 3","Temperatura 10°C → score 4","Confort (lluvia+nubes+temp)/3 = 3","Estabilidad (presion+visib)/2 = 4","Media ponderada = 2.43 → redondeado = 2"],"safety":["2+ criticos en 1 (v=2,o=1,r=1) → score = 1","Oleaje = 1 → score ≤ 2","Viento = 2 → score ≤ 3","Rachas = 1 → score ≤ 2","Presion = 3 → score ≤ 5","4 factores ≤ 4 → score ≤ 2"]},{"name":"Galerna cantabrica","desc":"Olas 6m + viento 45kn + rachas 60kn","inputs":{"viento_nudos":45,"racha_nudos":60,"swell_altura":6.0,"swell_periodo":7,"viento_ola_altura":1.5,"viento_ola_periodo":3,"prob_precipitacion":95,"visibilidad_m":1000,"nubosidad":100,"temperatura":8,"presion_trend_6h":-8},"score":1,"label":"Muy peligroso","color":"#EF5350","rec":"Condiciones extremas. Prohibido navegar.","scores":{"viento":1,"oleaje":1,"racha":1,"lluvia":3,"visibilidad":3,"nubosidad":1,"presion":1,"temperatura":3},"weighted":1.56,"weighted_round":2,"steps":["Viento 45 kn → score 1","Rachas 60 kn → score 1","Swell 6.0m → oleaje combinado = 1","Lluvia 95% → score 3","Visibilidad 1000m → score 3","Nubosidad 100% → score 1","Presion tend. -8 hPa/6h → score 1","Temperatura 8°C → score 3","Confort (lluvia+nubes+temp)/3 = 2","Estabilidad (presion+visib)/2 = 2","Media ponderada = 1.56 → redondeado = 2"],"safety":["2+ criticos en 1 (v=1,o=1,r=1) → score = 1","Oleaje = 1 → score ≤ 2","Viento = 1 → score ≤ 2","Rachas = 1 → score ≤ 2","Presion = 1 → score ≤ 4","5 factores ≤ 4 → score ≤ 2"]},{"name":"Solo viento fuerte 25kn","desc":"Mar moderada pero viento peligroso","inputs":{"viento_nudos":25,"racha_nudos":35,"swell_altura":0.8,"swell_periodo":9,"viento_ola_altura":0.6,"viento_ola_periodo":4,"prob_precipitacion":30,"visibilidad_m":15000,"nubosidad":40,"temperatura":16,"presion_trend_6h":-1},"score":4,"label":"Malo","color":"#FF3D00","rec":"Condiciones desfavorables. Mejor quedarse en puerto.","scores":{"viento":3,"oleaje":5,"racha":3,"lluvia":8,"visibilidad":9,"nubosidad":7,"presion":9,"temperatura":7},"weighted":5.73,"weighted_round":6,"steps":["Viento 25 kn → score 3","Rachas 35 kn → score 3","Swell 0.8m → oleaje combinado = 5","Lluvia 30% → score 8","Visibilidad 15000m → score 9","Nubosidad 40% → score 7","Presion tend. -1 hPa/6h → score 9","Temperatura 16°C → score 7","Confort (lluvia+nubes+temp)/3 = 7","Estabilidad (presion+visib)/2 = 9","Media ponderada = 5.73 → redondeado = 6"],"safety":["Peor critico = 3 → score ≤ 4","Oleaje = 5 → score ≤ 6","Rachas = 3 → score ≤ 4"]},{"name":"Niebla cerrada","desc":"Mar buena pero visibilidad 300m","inputs":{"viento_nudos":5,"racha_nudos":8,"swell_altura":0.5,"swell_periodo":11,"viento_ola_altura":0.1,"viento_ola_periodo":5,"prob_precipitacion":60,"visibilidad_m":300,"nubosidad":100,"temperatura":14,"presion_trend_6h":0},"score":4,"label":"Malo","color":"#FF3D00","rec":"Condiciones desfavorables. Mejor quedarse en puerto.","scores":{"viento":10,"oleaje":9,"racha":10,"lluvia":6,"visibilidad":1,"nubosidad":1,"presion":9,"temperatura":6},"weighted":7.37,"weighted_round":7,"steps":["Viento 5 kn → score 10","Rachas 8 kn → score 10","Swell 0.5m → oleaje combinado = 9","Lluvia 60% → score 6","Visibilidad 300m → score 1","Nubosidad 100% → score 1","Presion tend. 0 hPa/6h → score 9","Temperatura 14°C → score 6","Confort (lluvia+nubes+temp)/3 = 4","Estabilidad (presion+visib)/2 = 5","Media ponderada = 7.37 → redondeado = 7"],"safety":["Visibilidad = 1 → score ≤ 4"]},{"name":"Lluvia torrencial","desc":"Mar aceptable pero diluviando 8mm/h","inputs":{"viento_nudos":12,"racha_nudos":20,"swell_altura":0.8,"swell_periodo":9,"viento_ola_altura":0.3,"viento_ola_periodo":4,"prob_precipitacion":100,"precipitacion_mm":8.0,"visibilidad_m":5000,"nubosidad":100,"temperatura":13,"presion_trend_6h":-4},"score":5,"label":"Regular","color":"#FF6D00","rec":"Condiciones regulares. Solo si tienes experiencia.","scores":{"viento":7,"oleaje":7,"racha":7,"lluvia":1,"visibilidad":6,"nubosidad":1,"presion":3,"temperatura":5},"weighted":5.25,"weighted_round":5,"steps":["Viento 12 kn → score 7","Rachas 20 kn → score 7","Swell 0.8m → oleaje combinado = 7","Lluvia 100% + 8.0mm/h → score 1","Visibilidad 5000m → score 6","Nubosidad 100% → score 1","Presion tend. -4 hPa/6h → score 3","Temperatura 13°C → score 5","Confort (lluvia+nubes+temp)/3 = 2","Estabilidad (presion+visib)/2 = 4","Media ponderada = 5.25 → redondeado = 5"],"safety":["Presion = 3 → score ≤ 5","Lluvia = 1 → score ≤ 5"]},{"name":"Presion desplomandose","desc":"Borrasca acercandose, mar aun tranquila","inputs":{"viento_nudos":10,"racha_nudos":18,"swell_altura":0.7,"swell_periodo":10,"viento_ola_altura":0.2,"viento_ola_periodo":5,"prob_precipitacion":40,"visibilidad_m":12000,"nubosidad":70,"temperatura":15,"presion_trend_6h":-7},"score":4,"label":"Malo","color":"#FF3D00","rec":"Condiciones desfavorables. Mejor quedarse en puerto.","scores":{"viento":8,"oleaje":8,"racha":8,"lluvia":7,"visibilidad":8,"nubosidad":4,"presion":1,"temperatura":6},"weighted":6.81,"weighted_round":7,"steps":["Viento 10 kn → score 8","Rachas 18 kn → score 8","Swell 0.7m → oleaje combinado = 8","Lluvia 40% → score 7","Visibilidad 12000m → score 8","Nubosidad 70% → score 4","Presion tend. -7 hPa/6h → score 1","Temperatura 15°C → score 6","Confort (lluvia+nubes+temp)/3 = 6","Estabilidad (presion+visib)/2 = 4","Media ponderada = 6.81 → redondeado = 7"],"safety":["Presion = 1 → score ≤ 4"]}]
+;
+
+const FACTOR_ORDER = ['oleaje','viento','racha','lluvia','visibilidad','nubosidad','presion','temperatura'];
+const FACTOR_NAMES = {oleaje:'Oleaje',viento:'Viento',racha:'Rachas',lluvia:'Lluvia',visibilidad:'Visib.',nubosidad:'Nubes',presion:'Presion',temperatura:'Temp.'};
+
+const sdiv = document.getElementById('scenarios');
+DATA.forEach(d => {
+  const info = sc(d.score);
+
+  // Input details
+  const inp = d.inputs;
+  const inputRows = [
+    ['Swell', (inp.swell_altura||'-')+'m'],
+    ['Chop', (inp.viento_ola_altura||'-')+'m'],
+    ['Viento', (inp.viento_nudos||'-')+' kn'],
+    ['Rachas', (inp.racha_nudos||'-')+' kn'],
+    ['Lluvia', (inp.prob_precipitacion||0)+'%' + (inp.precipitacion_mm ? ' + '+inp.precipitacion_mm+'mm/h':'')],
+    ['Visibilidad', inp.visibilidad_m ? (inp.visibilidad_m>=1000?(inp.visibilidad_m/1000)+'km':inp.visibilidad_m+'m') : '-'],
+    ['Nubes', (inp.nubosidad||'-')+'%'],
+    ['Temperatura', (inp.temperatura||'-')+'°C'],
+    ['Presion tend.', (inp.presion_trend_6h||0)+' hPa/6h'],
+  ].map(([k,v]) => `<div class="detail-row"><span class="key">${k}</span><span class="val">${v}</span></div>`).join('');
+
+  // Score bars
+  const bars = FACTOR_ORDER.map(k => {
+    const v = d.scores[k];
+    const c = sc(v).c;
+    return `<div class="bar-wrap"><span class="bar-label">${FACTOR_NAMES[k]}</span><div class="bar" style="width:${v*10}%;background:${c}"></div><span class="bar-val" style="color:${c}">${v}</span></div>`;
+  }).join('');
+
+  // Verbose steps
+  const stepsHtml = d.steps.map(s => {
+    const parts = s.split(' → ');
+    if (parts.length === 2) {
+      return `<div class="step-line"><span class="arrow">→</span><span>${parts[0]}</span><span class="step-result">${parts[1]}</span></div>`;
+    }
+    return `<div class="step-line"><span class="arrow">→</span><span>${s}</span></div>`;
+  }).join('');
+
+  // Safety rules applied
+  let safetyHtml = '';
+  if (d.safety.length > 0) {
+    safetyHtml = d.safety.map(s => {
+      const cls = s.includes('= 1') || s.includes('≤ 2') ? 'red' : s.includes('≤ 3') || s.includes('≤ 4') ? 'orange' : 'blue';
+      return `<div class="safety-line ${cls}">⚠ ${s}</div>`;
+    }).join('');
+  } else {
+    safetyHtml = '<div style="color:#4caf50;font-size:0.85em;padding:4px">✓ Ninguna regla de seguridad se activa</div>';
+  }
+
+  sdiv.innerHTML += `
+    <div class="scenario">
+      <div class="sc-header">
+        <div class="score-badge" style="background:${info.c}">${d.score}</div>
+        <div>
+          <div class="sc-name">${d.name}</div>
+          <div class="sc-desc">${d.desc}</div>
+          <div class="sc-label" style="color:${info.c}">${d.label}</div>
+          <div class="sc-rec">${d.rec}</div>
+        </div>
+      </div>
+      <div class="sc-body">
+        <div class="sc-panel">
+          <h4>Datos de entrada</h4>
+          ${inputRows}
+        </div>
+        <div class="sc-panel">
+          <h4>Score por factor (1-10)</h4>
+          ${bars}
+        </div>
+        <div class="sc-panel sc-verbose">
+          <h4>Paso a paso (verbose)</h4>
+          ${stepsHtml}
+          <div class="weighted-box">
+            <span class="calc">Media ponderada = ${d.weighted}</span>
+            <span class="arrow" style="color:#546e7a">→</span>
+            <span class="result">redondeado = ${d.weighted_round}</span>
+          </div>
+          <h4 style="margin-top:12px">Reglas de seguridad aplicadas</h4>
+          ${safetyHtml}
+          <div class="final-box" style="border-color:${info.c}">
+            <div class="score-badge" style="background:${info.c};width:36px;height:36px;font-size:1.1em">${d.score}</div>
+            <div>
+              <div class="text" style="color:${info.c}">Score final: ${d.score} — ${d.label}</div>
+              <div style="color:#78909c;font-size:0.85em">Media daba ${d.weighted_round}, ${d.score < d.weighted_round ? 'bajado a '+d.score+' por reglas de seguridad' : 'sin cambios por reglas'}</div>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>`;
+});
+</script>
+
+</body>
+</html>

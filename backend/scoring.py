@@ -440,7 +440,12 @@ def calculate_score(inp: ScoringInput) -> ScoringResult:
     if count_critical_1 >= 2:
         score = 1
     elif worst_critical <= 1:
-        score = min(score, 2)
+        # Un crítico en 1 + otro crítico malo (≤3) = temporal claro
+        second_worst = sorted(critical)[1]
+        if second_worst <= 3:
+            score = 1
+        else:
+            score = min(score, 2)
     elif worst_critical <= 2:
         score = min(score, 3)
     elif worst_critical <= 3:
