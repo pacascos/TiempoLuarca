@@ -134,25 +134,25 @@ def _score_oleaje(inp) -> int:
 
 def _score_swell(altura_m: float, periodo_s: float | None) -> int:
     """Mar de fondo (swell) para Antares 6.5.
-    En el Cantábrico 0.5-1m es lo habitual en buen día.
-    1.5m+ ya incomodo, 2m+ no salir."""
+    En el Cantábrico 0.5-0.8m es lo habitual en buen día.
+    1m+ ya se nota, 1.5m+ incómodo, 2m+ no salir."""
     if altura_m <= 0.3:
         base = 10
     elif altura_m <= 0.5:
         base = 9
     elif altura_m <= 0.7:
         base = 8
-    elif altura_m <= 1.0:
+    elif altura_m <= 0.9:
         base = 7
-    elif altura_m <= 1.3:
+    elif altura_m <= 1.1:
         base = 6
-    elif altura_m <= 1.5:
+    elif altura_m <= 1.3:
         base = 5
-    elif altura_m <= 1.8:
+    elif altura_m <= 1.5:
         base = 4
-    elif altura_m <= 2.0:
+    elif altura_m <= 1.8:
         base = 3
-    elif altura_m <= 2.5:
+    elif altura_m <= 2.2:
         base = 2
     else:
         base = 1
@@ -457,6 +457,8 @@ def calculate_score(inp: ScoringInput) -> ScoringResult:
         score = min(score, 5)
     elif so <= 5:
         score = min(score, 6)
+    elif so <= 6:
+        score = min(score, 7)
 
     # Viento y rachas
     if sv <= 1:
