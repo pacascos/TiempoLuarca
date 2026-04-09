@@ -118,10 +118,13 @@ def _score_oleaje(inp) -> int:
     if swell_h is not None and chop_h is not None:
         score_swell = _score_swell(swell_h, swell_p)
         score_chop = _score_chop(chop_h, chop_p)
-        # Combinar: el peor de los dos pesa más
+        # El peor componente domina: chop bajo no compensa swell peligroso
         worst = min(score_swell, score_chop)
         best = max(score_swell, score_chop)
-        combined = worst * 0.65 + best * 0.35
+        if worst <= 2:
+            # Oleaje peligroso: el componente bueno apenas influye
+            return worst
+        combined = worst * 0.75 + best * 0.25
         return max(1, min(10, round(combined)))
 
     if total_h is None:
