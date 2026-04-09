@@ -429,9 +429,14 @@ def calculate_score(inp: ScoringInput) -> ScoringResult:
     score = max(1, min(10, round(weighted)))
 
     # Reglas de seguridad: factores críticos (viento, oleaje, rachas)
-    # Un solo factor extremo ya debe hundir el score
-    worst_critical = min(sv, so, sr)
-    if worst_critical <= 1:
+    critical = [sv, so, sr]
+    count_critical_1 = sum(1 for s in critical if s <= 1)
+    worst_critical = min(critical)
+
+    # Dos o más factores críticos en 1 = temporal, score 1 sin discusión
+    if count_critical_1 >= 2:
+        score = 1
+    elif worst_critical <= 1:
         score = min(score, 2)
     elif worst_critical <= 2:
         score = min(score, 3)
