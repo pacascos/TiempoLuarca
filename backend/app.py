@@ -153,6 +153,44 @@ async def _refresh_cache(force: bool = False):
         logger.error("Error guardando historico: %s", e)
 
 
+def _compute_day_score_from_hourly(
+    date_str: str,
+    forecast: list,
+    marine_by_hour: dict,
+    aemet_by_hour: dict,
+) -> tuple[int | None, list[int]]:
+    """Score diario 1-10 a partir del forecast horario.
+    Toma horas de luz (8-20), promedia scores y penaliza con la peor ventana 3h.
+    Devuelve (score_dia, scores_horarios). None si no hay datos.
+    """
+    day_hours = [f for f in forecast if f.get("timestamp", "").startswith(date_str)]
+    daylight = [f for f in day_hours if 8 <= int(f.get("timestamp", "T00")[11:13]) <= 20]
+    if not daylight:
+        daylight = day_hours
+    if not daylight:
+        return None, []
+
+    scores = []
+    for f in daylight:
+        ts = f.get("timestamp", "")[:13]
+        m = marine_by_hour.get(ts)
+        aemet_h = aemet_by_hour.get(ts)
+        f_scoring = f
+        if aemet_h and aemet_h.get("prob_precipitacion") is not None:
+            f_scoring = {**f, "prob_precipitacion": aemet_h["prob_precipitacion"]}
+        scored = score_forecast_hour(f_scoring, m)
+        scores.append(scored["score"])
+
+    avg_raw = sum(scores) / len(scores)
+    worst_window_avg = None
+    if len(scores) >= 3:
+        worst_window_avg = min(
+            sum(scores[i:i+3]) / 3 for i in range(len(scores) - 2)
+        )
+    day_score_float = min(avg_raw, worst_window_avg) if worst_window_avg is not None else avg_raw
+    return round(day_score_float), scores
+
+
 def _compute_current_score(data: dict) -> int | None:
     obs = data.get("observacion_busto")
     forecast = data.get("forecast") or []
@@ -552,6 +590,12 @@ async def api_summary():
         ts = m.get("timestamp", "")[:13]
         marine_by_hour[ts] = m
 
+    # Indexar AEMET Valdés por fecha+hora para lluvia (más fiable localmente)
+    aemet_by_hour = {}
+    for av in _cache.get("prediccion_valdes") or []:
+        if av.get("fecha") and av.get("hora") is not None:
+            aemet_by_hour[f"{av['fecha']}T{int(av['hora']):02d}"] = av
+
     now = datetime.now()
     DAY_NAMES = ["Lunes", "Martes", "Miercoles", "Jueves", "Viernes", "Sabado", "Domingo"]
 
@@ -578,7 +622,6 @@ async def api_summary():
 
     def summarize_day(date_str: str) -> dict:
         day_hours = [f for f in forecast if f.get("timestamp", "").startswith(date_str)]
-        # Solo horas de luz (7-21)
         daylight = [f for f in day_hours if 8 <= int(f.get("timestamp", "T00")[11:13]) <= 20]
         if not daylight:
             daylight = day_hours
@@ -586,12 +629,9 @@ async def api_summary():
         if not daylight:
             return {"fecha": date_str, "disponible": False}
 
-        scores = []
-        for f in daylight:
-            ts = f.get("timestamp", "")[:13]
-            m = marine_by_hour.get(ts)
-            scored = score_forecast_hour(f, m)
-            scores.append(scored["score"])
+        avg_score, scores = _compute_day_score_from_hourly(
+            date_str, forecast, marine_by_hour, aemet_by_hour
+        )
 
         vientos = [f.get("viento_nudos") for f in daylight if f.get("viento_nudos") is not None]
         viento_dirs = [f.get("viento_dir") for f in daylight if f.get("viento_dir") is not None]
@@ -601,9 +641,8 @@ async def api_summary():
         precip = [f.get("prob_precipitacion") for f in daylight if f.get("prob_precipitacion") is not None]
         temps = [f.get("temperatura") for f in daylight if f.get("temperatura") is not None]
 
-        avg_score = round(sum(scores) / len(scores)) if scores else None
-        best_score = max(scores) if scores else None   # 10=mejor
-        worst_score = min(scores) if scores else None   # 1=peor
+        best_score = max(scores) if scores else None
+        worst_score = min(scores) if scores else None
 
         from backend.scoring import LABELS
         label, color, recomendacion = LABELS.get(avg_score, ("?", "#999", ""))
@@ -695,26 +734,53 @@ async def api_extended():
     if not extended:
         return {"days": [], "updated": _cache.get("timestamp")}
 
+    # Indexar forecast horario + marine + AEMET Valdés para reusar en días con datos finos
+    forecast = _cache.get("forecast") or []
+    marine = _cache.get("oleaje") or []
+    marine_by_hour = {m.get("timestamp", "")[:13]: m for m in marine}
+    aemet_by_hour = {}
+    for av in _cache.get("prediccion_valdes") or []:
+        if av.get("fecha") and av.get("hora") is not None:
+            aemet_by_hour[f"{av['fecha']}T{int(av['hora']):02d}"] = av
+
+    forecast_dates = {f.get("timestamp", "")[:10] for f in forecast}
+
+    from backend.scoring import LABELS
+
     DAY_NAMES = ["Lun", "Mar", "Mie", "Jue", "Vie", "Sab", "Dom"]
 
     result = []
     for i, d in enumerate(extended):
-        # Score orientativo diario
-        inp = ScoringInput(
-            viento_nudos=d.get("viento_max_kn"),
-            racha_nudos=d.get("racha_max_kn"),
-            swell_altura=d.get("swell_max"),
-            viento_ola_altura=d.get("chop_max"),
-            ola_altura=d.get("ola_max"),
-            ola_periodo=d.get("periodo_max"),
-            prob_precipitacion=d.get("prob_precipitacion"),
-            precipitacion_mm=d.get("precipitacion_mm"),
-            nubosidad=d.get("nubosidad"),
-            temperatura=(d.get("temp_max", 15) + d.get("temp_min", 10)) / 2 if d.get("temp_max") else None,
-        )
-        scored = calculate_score(inp)
-
         fecha = d.get("fecha", "")
+
+        # Si tenemos forecast horario para esa fecha, usar scoring fino (mismo que summary)
+        day_score_hourly = None
+        if fecha in forecast_dates:
+            day_score_hourly, _ = _compute_day_score_from_hourly(
+                fecha, forecast, marine_by_hour, aemet_by_hour
+            )
+
+        if day_score_hourly is not None:
+            score_val = day_score_hourly
+            label_v, color_v, _rec = LABELS[score_val]
+        else:
+            # Fallback: score orientativo desde valores diarios máximos
+            inp = ScoringInput(
+                viento_nudos=d.get("viento_max_kn"),
+                racha_nudos=d.get("racha_max_kn"),
+                swell_altura=d.get("swell_max"),
+                viento_ola_altura=d.get("chop_max"),
+                ola_altura=d.get("ola_max"),
+                ola_periodo=d.get("periodo_max"),
+                prob_precipitacion=d.get("prob_precipitacion"),
+                precipitacion_mm=d.get("precipitacion_mm"),
+                nubosidad=d.get("nubosidad"),
+                temperatura=(d.get("temp_max", 15) + d.get("temp_min", 10)) / 2 if d.get("temp_max") else None,
+            )
+            scored = calculate_score(inp)
+            score_val = scored.score
+            label_v = scored.label
+            color_v = scored.color
         try:
             from datetime import datetime as dt
             day_dt = dt.strptime(fecha, "%Y-%m-%d")
@@ -726,9 +792,9 @@ async def api_extended():
             "fecha": fecha,
             "dia": day_name,
             "fiable": i < 7,  # primeros 7 dias = fiable
-            "score": scored.score,
-            "label": scored.label,
-            "color": scored.color,
+            "score": score_val,
+            "label": label_v,
+            "color": color_v,
             "viento_max_kn": d.get("viento_max_kn"),
             "racha_max_kn": d.get("racha_max_kn"),
             "ola_max": d.get("ola_max"),
