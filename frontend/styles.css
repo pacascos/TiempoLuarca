@@ -545,6 +545,11 @@ h2 {
     color: var(--text-dim);
     line-height: 1.6;
 }
+.summary-wave-split {
+    font-size: 0.65rem;
+    opacity: 0.8;
+    padding-left: 0.5rem;
+}
 .summary-window {
     margin-top: 0.5rem;
     font-size: 0.72rem;

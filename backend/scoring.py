@@ -49,6 +49,10 @@ class ScoringResult:
     color: str
     recomendacion: str
     detalle: dict
+    # Reglas que bajaron el score (caps de seguridad) — para que la explicación
+    # venga de la fuente de la verdad, no se duplique en otros sitios.
+    reglas_aplicadas: list = None
+    score_ponderado: float = 0.0  # la suma ponderada antes de aplicar caps
 
 
 # ─── Escalas individuales (10=óptimo, 1=peligroso) ───────────────────────────
@@ -429,7 +433,15 @@ def calculate_score(inp: ScoringInput) -> ScoringResult:
         + estabilidad * WEIGHTS["estabilidad"]
     )
 
+    score_ponderado = weighted
     score = max(1, min(10, round(weighted)))
+    reglas: list[str] = []
+
+    def cap(new_max: int, regla: str):
+        nonlocal score
+        if new_max < score:
+            score = new_max
+            reglas.append(regla)
 
     # Reglas de seguridad: factores críticos (viento, oleaje, rachas)
     critical = [sv, so, sr]
@@ -438,64 +450,63 @@ def calculate_score(inp: ScoringInput) -> ScoringResult:
 
     # Dos o más factores críticos en 1 = temporal, score 1 sin discusión
     if count_critical_1 >= 2:
-        score = 1
+        cap(1, "2+ factores críticos (viento/oleaje/racha) en nota 1 → temporal: score 1")
     elif worst_critical <= 1:
-        # Un crítico en 1 + otro crítico malo (≤3) = temporal claro
         second_worst = sorted(critical)[1]
         if second_worst <= 3:
-            score = 1
+            cap(1, f"Un crítico en 1 y otro ≤3 → temporal claro: score 1")
         else:
-            score = min(score, 2)
+            cap(2, "Un factor crítico (viento/oleaje/racha) en 1 → score limitado a 2")
     elif worst_critical <= 2:
-        score = min(score, 3)
+        cap(3, "Peor crítico ≤2 → score limitado a 3")
     elif worst_critical <= 3:
-        score = min(score, 4)
+        cap(4, "Peor crítico ≤3 → score limitado a 4")
 
     # Oleaje es especialmente importante para un barco de 6.5m
     if so <= 1:
-        score = min(score, 2)
+        cap(2, "Oleaje en 1 → score limitado a 2 (mar peligroso para barco de 6.5m)")
     elif so <= 2:
-        score = min(score, 3)
+        cap(3, "Oleaje ≤2 → score limitado a 3")
     elif so <= 3:
-        score = min(score, 4)
+        cap(4, "Oleaje ≤3 → score limitado a 4")
     elif so <= 4:
-        score = min(score, 5)
+        cap(5, "Oleaje ≤4 → score limitado a 5")
     elif so <= 5:
-        score = min(score, 6)
+        cap(6, "Oleaje ≤5 → score limitado a 6")
     elif so <= 6:
-        score = min(score, 7)
+        cap(7, "Oleaje ≤6 → score limitado a 7")
 
     # Viento y rachas
     if sv <= 1:
-        score = min(score, 2)
+        cap(2, "Viento en 1 → score limitado a 2")
     elif sv <= 2:
-        score = min(score, 3)
+        cap(3, "Viento ≤2 → score limitado a 3")
     if sr <= 1:
-        score = min(score, 2)
+        cap(2, "Racha en 1 → score limitado a 2")
     elif sr <= 2:
-        score = min(score, 3)
+        cap(3, "Racha ≤2 → score limitado a 3")
     elif sr <= 3:
-        score = min(score, 4)
+        cap(4, "Racha ≤3 → score limitado a 4")
 
     # Visibilidad y presión
     if svis <= 2:
-        score = min(score, 4)
+        cap(4, "Visibilidad ≤2 (niebla) → score limitado a 4")
     if spres <= 2:
-        score = min(score, 4)
+        cap(4, "Presión en caída rápida → score limitado a 4 (borrasca)")
     elif spres <= 3:
-        score = min(score, 5)
+        cap(5, "Presión bajando → score limitado a 5")
 
     # Lluvia muy alta limita el score (no es seguridad pero arruina la salida)
     if sl <= 2:
-        score = min(score, 5)
+        cap(5, "Lluvia intensa → score limitado a 5")
 
     # Regla combinada: si varios factores de seguridad son malos a la vez
     # (no cuenta temperatura ni nubosidad que son confort)
     bad_count = sum(1 for s in [sv, so, sl, svis, sr] if s <= 4)
     if bad_count >= 4:
-        score = min(score, 2)
+        cap(2, f"{bad_count} factores simultáneamente ≤4 → score limitado a 2")
     elif bad_count >= 3:
-        score = min(score, 3)
+        cap(3, f"{bad_count} factores simultáneamente ≤4 → score limitado a 3")
 
     label, color, recomendacion = LABELS[score]
 
@@ -512,6 +523,8 @@ def calculate_score(inp: ScoringInput) -> ScoringResult:
         label=label,
         color=color,
         recomendacion=recomendacion,
+        reglas_aplicadas=reglas,
+        score_ponderado=round(score_ponderado, 2),
         detalle={
             "viento_nudos": inp.viento_nudos,
             "racha_nudos": inp.racha_nudos,
@@ -563,5 +576,7 @@ def score_forecast_hour(forecast_entry: dict, marine_entry: dict | None = None, 
             "presion": result.score_presion,
             "temperatura": result.score_temperatura,
         },
+        "reglas_aplicadas": result.reglas_aplicadas or [],
+        "score_ponderado": result.score_ponderado,
         "detalle": result.detalle,
     }

@@ -1,0 +1,303 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>TiempoLuarca - ¿Por qué esa nota?</title>
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
+    <style>
+        *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+        :root {
+            --bg: #060d1f;
+            --bg2: #0b1530;
+            --glass: rgba(15, 25, 55, 0.65);
+            --glass-border: rgba(255, 255, 255, 0.07);
+            --text: #e8ecf4;
+            --text-dim: #7b8ba3;
+            --accent: #3b82f6;
+            --radius: 16px;
+        }
+        html { font-size: 16px; }
+        body {
+            font-family: 'Inter', -apple-system, sans-serif;
+            background: var(--bg);
+            color: var(--text);
+            line-height: 1.5;
+            min-height: 100vh;
+            padding: 1rem;
+        }
+        .container { max-width: 1000px; margin: 0 auto; }
+        h1 { font-size: 1.4rem; margin-bottom: 0.3rem; }
+        h2 { font-size: 1.05rem; margin: 1.1rem 0 0.4rem; color: var(--text); }
+        h3 { font-size: 0.9rem; margin: 0.8rem 0 0.3rem; color: var(--accent); text-transform: uppercase; letter-spacing: 0.06em; }
+        a { color: var(--accent); text-decoration: none; }
+        a:hover { text-decoration: underline; }
+        .back { margin-bottom: 1rem; display: inline-block; font-size: 0.9rem; }
+        .intro { color: var(--text-dim); font-size: 0.88rem; margin-bottom: 1rem; }
+        .intro code { background: rgba(255,255,255,0.06); padding: 0.1rem 0.3rem; border-radius: 4px; font-size: 0.8rem; }
+        .updated { font-size: 0.75rem; color: var(--text-dim); margin-bottom: 1.5rem; }
+
+        .day-card {
+            background: var(--glass);
+            border: 1px solid var(--glass-border);
+            border-left: 4px solid var(--text-dim);
+            border-radius: var(--radius);
+            padding: 1.2rem;
+            margin-bottom: 1.5rem;
+        }
+        .day-header {
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            gap: 1rem;
+            margin-bottom: 0.8rem;
+            flex-wrap: wrap;
+        }
+        .day-title { font-size: 1.25rem; font-weight: 700; }
+        .day-date { color: var(--text-dim); font-size: 0.9rem; }
+        .score-block {
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            min-width: 80px;
+        }
+        .score-big { font-size: 2.2rem; font-weight: 700; line-height: 1; }
+        .score-label { font-size: 0.75rem; font-weight: 600; text-transform: uppercase; letter-spacing: 0.05em; }
+        .verdict { font-size: 0.92rem; margin: 0.4rem 0 0.8rem; color: var(--text-dim); font-style: italic; }
+
+        .rule-box {
+            background: rgba(59, 130, 246, 0.08);
+            border-left: 3px solid var(--accent);
+            padding: 0.7rem 1rem;
+            border-radius: 6px;
+            font-size: 0.85rem;
+            margin: 0.6rem 0;
+        }
+        .rule-box .rule-label { color: var(--accent); font-weight: 600; font-size: 0.75rem; text-transform: uppercase; letter-spacing: 0.05em; margin-bottom: 0.25rem; }
+
+        .factores { display: flex; flex-direction: column; gap: 0.6rem; margin: 0.5rem 0; }
+        .factor {
+            background: rgba(239, 83, 80, 0.08);
+            border-left: 3px solid #EF5350;
+            padding: 0.7rem 1rem;
+            border-radius: 6px;
+            font-size: 0.85rem;
+        }
+        .factor-name { font-weight: 600; margin-bottom: 0.2rem; }
+        .factor-score { color: var(--text-dim); font-size: 0.8rem; }
+        .factor-desc { margin-top: 0.3rem; color: var(--text); }
+
+        .rules-list { list-style: none; padding: 0; margin: 0.3rem 0; }
+        .rules-list li {
+            padding: 0.3rem 0.6rem;
+            margin: 0.2rem 0;
+            background: rgba(255,255,255,0.03);
+            border-radius: 4px;
+            font-size: 0.82rem;
+            color: var(--text-dim);
+        }
+        .rules-list li::before { content: '↳ '; color: var(--accent); }
+
+        details { margin-top: 0.8rem; }
+        details summary {
+            cursor: pointer;
+            padding: 0.4rem 0;
+            color: var(--accent);
+            font-size: 0.85rem;
+            user-select: none;
+        }
+        details summary:hover { text-decoration: underline; }
+        .hours-wrapper { overflow-x: auto; margin-top: 0.5rem; }
+        table.hours {
+            width: 100%;
+            border-collapse: collapse;
+            font-size: 0.78rem;
+            min-width: 700px;
+        }
+        table.hours th, table.hours td {
+            padding: 0.35rem 0.45rem;
+            text-align: center;
+            border-bottom: 1px solid var(--glass-border);
+            white-space: nowrap;
+        }
+        table.hours th { color: var(--text-dim); font-weight: 500; font-size: 0.72rem; text-transform: uppercase; letter-spacing: 0.04em; }
+        table.hours td.hour { font-weight: 600; text-align: left; color: var(--text); }
+        table.hours td.score-cell { font-weight: 700; }
+        table.hours td.comp { color: var(--text-dim); }
+        table.hours td.comp.bad { color: #EF5350; font-weight: 600; }
+        table.hours td.comp.warn { color: #FFAB00; }
+        table.hours td.comp.good { color: #64DD17; }
+
+        .unavailable { color: var(--text-dim); font-style: italic; padding: 1rem 0; }
+        #loading { color: var(--text-dim); padding: 3rem; text-align: center; }
+        #error { color: #EF5350; padding: 2rem; text-align: center; }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <a class="back" href="/">&larr; Volver</a>
+        <h1>¿Por qué esa nota?</h1>
+        <p class="intro">
+            Desglose detallado del score de los próximos 4 días.
+            Todas las reglas aplicadas vienen directamente de <code>backend/scoring.py</code>,
+            así que si cambia el cálculo, esta página también cambia.
+        </p>
+        <div class="updated" id="updated"></div>
+
+        <div id="loading">Cargando...</div>
+        <div id="error" style="display:none"></div>
+        <div id="days"></div>
+    </div>
+
+    <script>
+    const COMP_LABELS = {
+        viento: 'Viento', oleaje: 'Oleaje', racha: 'Rachas', lluvia: 'Lluvia',
+        visibilidad: 'Visibilidad', nubosidad: 'Nubosidad', presion: 'Presión', temperatura: 'Temperatura'
+    };
+
+    function scoreColor(s) {
+        if (s == null) return '#666';
+        if (s >= 9) return '#64DD17';
+        if (s >= 7) return '#AEEA00';
+        if (s >= 6) return '#FFD600';
+        if (s >= 5) return '#FFAB00';
+        if (s >= 4) return '#FF6D00';
+        if (s >= 3) return '#E53935';
+        return '#EF5350';
+    }
+
+    function compCellClass(s) {
+        if (s == null) return 'comp';
+        if (s <= 3) return 'comp bad';
+        if (s <= 5) return 'comp warn';
+        if (s >= 8) return 'comp good';
+        return 'comp';
+    }
+
+    function fmt(v, d = 1) {
+        if (v == null) return '--';
+        return (typeof v === 'number') ? v.toFixed(d) : v;
+    }
+
+    function renderDay(d) {
+        if (!d.disponible) {
+            return `<div class="day-card"><div class="day-title">${d.label}</div><div class="unavailable">Sin datos para este día</div></div>`;
+        }
+        const color = d.color || '#666';
+        const factoresHTML = (d.factores_criticos || []).map(f => `
+            <div class="factor">
+                <div class="factor-name">${f.factor_label} <span class="factor-score">(score medio ${f.score_medio})</span></div>
+                <div class="factor-desc">${f.explicacion || ''}</div>
+            </div>
+        `).join('');
+
+        const reglasDia = (d.reglas_aplicadas_dia || []);
+        const reglasHTML = reglasDia.length ? `
+            <h3>Reglas que bajaron la nota</h3>
+            <ul class="rules-list">
+                ${reglasDia.map(r => `<li>${r}</li>`).join('')}
+            </ul>
+        ` : '<div style="font-size:0.85rem; color: var(--text-dim); margin-top: 0.3rem;">No se activó ningún cap de seguridad.</div>';
+
+        // Componentes promedio: ordenados de peor a mejor
+        const compAvg = d.score_medio_componentes || {};
+        const compOrder = Object.entries(compAvg).sort((a,b) => a[1] - b[1]);
+        const compHTML = compOrder.map(([c, v]) =>
+            `<span style="color:${scoreColor(v)}">${COMP_LABELS[c] || c} ${v}</span>`
+        ).join(' · ');
+
+        // Tabla horaria
+        const comps = ['viento','oleaje','racha','lluvia','visibilidad','nubosidad','presion','temperatura'];
+        const headersComp = comps.map(c => `<th>${COMP_LABELS[c].slice(0,4)}</th>`).join('');
+        const rowsHTML = d.horas.map(h => {
+            const compsHTML = comps.map(c => {
+                const s = h.componentes[c];
+                return `<td class="${compCellClass(s)}">${s != null ? s : '-'}</td>`;
+            }).join('');
+            const chop = h.chop_m != null ? h.chop_m.toFixed(2) : '-';
+            const swell = h.swell_m != null ? h.swell_m.toFixed(2) : '-';
+            const viento = h.viento_kn != null ? h.viento_kn.toFixed(1) : '-';
+            const racha = h.racha_kn != null ? h.racha_kn.toFixed(1) : '-';
+            const reglasHora = (h.reglas_aplicadas || []).map(r => `<div style="font-size:0.72rem; color: var(--text-dim); margin-top: 0.1rem;">↳ ${r}</div>`).join('');
+            return `
+                <tr>
+                    <td class="hour">${h.hora}</td>
+                    <td class="score-cell" style="color:${scoreColor(h.score)}">${h.score}</td>
+                    ${compsHTML}
+                    <td>${viento} kn</td>
+                    <td>${racha} kn</td>
+                    <td>${swell} m</td>
+                    <td>${chop} m</td>
+                </tr>
+                ${reglasHora ? `<tr><td colspan="${3 + comps.length + 4}" style="text-align:left; padding:0 0.5rem 0.3rem;">${reglasHora}</td></tr>` : ''}
+            `;
+        }).join('');
+
+        return `
+            <div class="day-card" style="border-left-color: ${color}">
+                <div class="day-header">
+                    <div>
+                        <div class="day-title">${d.label}</div>
+                        <div class="day-date">${d.fecha}</div>
+                    </div>
+                    <div class="score-block">
+                        <div class="score-big" style="color:${color}">${d.score_dia}</div>
+                        <div class="score-label" style="color:${color}">${d.label_score}</div>
+                    </div>
+                </div>
+                <div class="verdict">${d.recomendacion}</div>
+
+                <div class="rule-box">
+                    <div class="rule-label">Cómo se calcula el score del día</div>
+                    ${d.regla_diaria}
+                    ${d.peor_ventana_rango ? `<br><span style="color: var(--text-dim); font-size: 0.8rem;">Peor ventana: ${d.peor_ventana_rango.inicio} — ${d.peor_ventana_rango.fin}</span>` : ''}
+                </div>
+
+                <h3>Componentes medios (horas de luz)</h3>
+                <div style="font-size: 0.85rem;">${compHTML}</div>
+
+                ${factoresHTML ? `<h3>Factores críticos</h3><div class="factores">${factoresHTML}</div>` : ''}
+
+                ${reglasHTML}
+
+                <details>
+                    <summary>Ver desglose hora a hora (${d.horas.length} horas)</summary>
+                    <div class="hours-wrapper">
+                        <table class="hours">
+                            <thead>
+                                <tr>
+                                    <th>Hora</th>
+                                    <th>Score</th>
+                                    ${headersComp}
+                                    <th>Viento</th>
+                                    <th>Racha</th>
+                                    <th>Swell</th>
+                                    <th>Chop</th>
+                                </tr>
+                            </thead>
+                            <tbody>${rowsHTML}</tbody>
+                        </table>
+                    </div>
+                </details>
+            </div>
+        `;
+    }
+
+    (async () => {
+        try {
+            const resp = await fetch('api/summary-explain');
+            if (!resp.ok) throw new Error('HTTP ' + resp.status);
+            const data = await resp.json();
+            document.getElementById('updated').textContent = 'Actualizado: ' + (data.updated || '').replace('T', ' ').slice(0, 16);
+            document.getElementById('days').innerHTML = (data.days || []).map(renderDay).join('');
+            document.getElementById('loading').style.display = 'none';
+        } catch (e) {
+            document.getElementById('loading').style.display = 'none';
+            const err = document.getElementById('error');
+            err.style.display = 'block';
+            err.textContent = 'Error cargando datos: ' + e.message;
+        }
+    })();
+    </script>
+</body>
+</html>

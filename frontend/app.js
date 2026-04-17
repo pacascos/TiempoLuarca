@@ -392,6 +392,7 @@ function renderSummary(data) {
             <div class="summary-details">
                 <span style="color:${windColor(d.viento_max)}">Viento: ${d.viento_medio != null ? knToDisplay(d.viento_medio) : '--'} ${windLabel()} (max ${d.viento_max != null ? knToDisplay(d.viento_max) : '--'})</span><br>
                 <span style="color:${swellColor(d.ola_max)}">Olas: ${d.ola_media || '--'}m (max ${d.ola_max || '--'}m)</span><br>
+                ${(d.swell_max != null || d.chop_max != null) ? `<span class="summary-wave-split">↳ Swell máx: ${d.swell_max != null ? d.swell_max.toFixed(2) + 'm' : '--'} · Chop máx: <span style="color:${swellColor(d.chop_max || 0)}">${d.chop_max != null ? d.chop_max.toFixed(2) + 'm' : '--'}</span></span><br>` : ''}
                 <span style="color:${rainColor(d.precip_max)}">Lluvia: max ${d.precip_max || 0}%</span><br>
                 <span style="color:${tempColor(d.temp_min)}">Temp: ${d.temp_min || '--'}° / ${d.temp_max || '--'}°</span>
             </div>

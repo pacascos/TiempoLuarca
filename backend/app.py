@@ -191,6 +191,72 @@ def _compute_day_score_from_hourly(
     return round(day_score_float), scores
 
 
+def _explain_componente(comp: str, horas: list) -> str:
+    """Texto que describe por qué un componente tiene nota baja."""
+    if comp == "oleaje":
+        chops = [h.get("chop_m") for h in horas if h.get("chop_m") is not None]
+        swells = [h.get("swell_m") for h in horas if h.get("swell_m") is not None]
+        chop_max = max(chops) if chops else 0
+        swell_max = max(swells) if swells else 0
+        if chop_max >= 0.7 and chop_max >= swell_max * 0.7:
+            return (f"Mar de viento (chop) llega a {chop_max:.2f}m. "
+                    f"Escala: chop >0.7m → score 4, >1.0m → 3, >1.3m → 2. "
+                    f"Con periodo corto (<4s) baja 1-2 puntos más por pantocazos.")
+        if swell_max >= 1.3:
+            return (f"Swell máximo {swell_max:.2f}m. "
+                    f"Escala: swell 1.3m → 5, 1.5m → 4, 1.8m → 3, 2.2m → 2. "
+                    f"Por encima de 2m no se recomienda salir con un Antares 6.5.")
+        return f"Oleaje combinado máximo {max(chop_max, swell_max):.2f}m."
+    if comp == "viento":
+        vs = [h.get("viento_kn") for h in horas if h.get("viento_kn") is not None]
+        if not vs: return ""
+        vmax = max(vs)
+        return (f"Viento máximo {vmax:.1f}kn. "
+                f"Escala: >15kn → 6, >18kn → 5, >20kn → 4, >25kn → 3, >30kn → 2.")
+    if comp == "racha":
+        rs = [h.get("racha_kn") for h in horas if h.get("racha_kn") is not None]
+        if not rs: return ""
+        rmax = max(rs)
+        return (f"Racha máxima {rmax:.1f}kn. "
+                f"Escala: >22kn → 7, >25kn → 6, >28kn → 5, >32kn → 4, >36kn → 3.")
+    if comp == "lluvia":
+        ps = [h.get("prob_precip") for h in horas if h.get("prob_precip") is not None]
+        if not ps: return ""
+        pmax = max(ps)
+        return f"Probabilidad de lluvia máxima {pmax}%. Se combina con intensidad (mm/h)."
+    if comp == "visibilidad":
+        vs = [h.get("visibilidad_m") for h in horas if h.get("visibilidad_m") is not None]
+        if not vs: return ""
+        vmin = min(vs)
+        return (f"Visibilidad mínima {vmin/1000:.1f}km. "
+                f"Escala: <3km → 5, <2km → 4, <1km → 3, <500m → 2.")
+    if comp == "nubosidad":
+        ns = [h.get("nubosidad") for h in horas if h.get("nubosidad") is not None]
+        if not ns: return ""
+        nmax = max(ns)
+        return f"Nubosidad máxima {nmax}%. Afecta al confort y visibilidad costera."
+    if comp == "presion":
+        return "Tendencia barométrica bajando (borrasca acercándose)."
+    if comp == "temperatura":
+        ts = [h.get("temperatura") for h in horas if h.get("temperatura") is not None]
+        if not ts: return ""
+        tmin = min(ts)
+        return f"Temperatura mínima {tmin:.1f}°C. En barco abierto el frío reduce confort."
+    return ""
+
+
+COMP_LABEL = {
+    "viento": "Viento",
+    "oleaje": "Oleaje",
+    "racha": "Rachas",
+    "lluvia": "Lluvia",
+    "visibilidad": "Visibilidad",
+    "nubosidad": "Nubosidad",
+    "presion": "Presión",
+    "temperatura": "Temperatura",
+}
+
+
 def _compute_current_score(data: dict) -> int | None:
     obs = data.get("observacion_busto")
     forecast = data.get("forecast") or []
@@ -265,6 +331,11 @@ async def index(request: Request):
 @app.get("/uso", response_class=HTMLResponse)
 async def usage_page():
     return FileResponse("frontend/usage.html")
+
+
+@app.get("/porque", response_class=HTMLResponse)
+async def porque_page():
+    return FileResponse("frontend/porque.html")
 
 
 @app.get("/api/usage")
@@ -638,6 +709,10 @@ async def api_summary():
         rachas = [f.get("viento_racha_nudos") for f in daylight if f.get("viento_racha_nudos") is not None]
         olas = [marine_by_hour.get(f.get("timestamp", "")[:13], {}).get("ola_altura") for f in daylight]
         olas = [o for o in olas if o is not None]
+        swells = [marine_by_hour.get(f.get("timestamp", "")[:13], {}).get("swell_altura") for f in daylight]
+        swells = [s for s in swells if s is not None]
+        chops = [marine_by_hour.get(f.get("timestamp", "")[:13], {}).get("viento_ola_altura") for f in daylight]
+        chops = [c for c in chops if c is not None]
         precip = [f.get("prob_precipitacion") for f in daylight if f.get("prob_precipitacion") is not None]
         temps = [f.get("temperatura") for f in daylight if f.get("temperatura") is not None]
 
@@ -676,6 +751,8 @@ async def api_summary():
             "racha_max": round(max(rachas), 1) if rachas else None,
             "ola_media": round(sum(olas) / len(olas), 2) if olas else None,
             "ola_max": round(max(olas), 2) if olas else None,
+            "swell_max": round(max(swells), 2) if swells else None,
+            "chop_max": round(max(chops), 2) if chops else None,
             "precip_max": max(precip) if precip else None,
             "temp_min": round(min(temps), 1) if temps else None,
             "temp_max": round(max(temps), 1) if temps else None,
@@ -688,6 +765,165 @@ async def api_summary():
         summary["label"] = d["label"]
         result["days"].append(summary)
     return result
+
+
+@app.get("/api/summary-explain")
+async def api_summary_explain():
+    """Explicación detallada del score de los 4 días del resumen,
+    basada en las reglas reales de scoring.py (reglas_aplicadas vienen
+    directamente de calculate_score, no se duplican aquí)."""
+    if not _cache:
+        raise HTTPException(503, "Datos no disponibles todavía")
+
+    forecast = _cache.get("forecast") or []
+    marine = _cache.get("oleaje") or []
+    marine_by_hour = {m.get("timestamp", "")[:13]: m for m in marine}
+    aemet_by_hour = {}
+    for av in _cache.get("prediccion_valdes") or []:
+        if av.get("fecha") and av.get("hora") is not None:
+            aemet_by_hour[f"{av['fecha']}T{int(av['hora']):02d}"] = av
+
+    now = datetime.now()
+    DAY_NAMES = ["Lunes", "Martes", "Miercoles", "Jueves", "Viernes", "Sabado", "Domingo"]
+
+    from backend.scoring import LABELS, WEIGHTS
+
+    def explain_day(date_str: str, day_label: str) -> dict:
+        day_hours = [f for f in forecast if f.get("timestamp", "").startswith(date_str)]
+        daylight = [f for f in day_hours if 8 <= int(f.get("timestamp", "T00")[11:13]) <= 20]
+        if not daylight:
+            daylight = day_hours
+        if not daylight:
+            return {"fecha": date_str, "label": day_label, "disponible": False}
+
+        horas = []
+        for f in daylight:
+            ts = f.get("timestamp", "")[:13]
+            m = marine_by_hour.get(ts)
+            aemet_h = aemet_by_hour.get(ts)
+            f_scoring = f
+            if aemet_h and aemet_h.get("prob_precipitacion") is not None:
+                f_scoring = {**f, "prob_precipitacion": aemet_h["prob_precipitacion"]}
+            scored = score_forecast_hour(f_scoring, m)
+            horas.append({
+                "hora": f["timestamp"][11:16],
+                "score": scored["score"],
+                "score_ponderado": scored.get("score_ponderado"),
+                "componentes": scored["scores"],
+                "reglas_aplicadas": scored.get("reglas_aplicadas", []),
+                "viento_kn": f.get("viento_nudos"),
+                "racha_kn": f.get("viento_racha_nudos"),
+                "viento_dir": f.get("viento_dir"),
+                "ola_total_m": (m or {}).get("ola_altura"),
+                "swell_m": (m or {}).get("swell_altura"),
+                "swell_periodo": (m or {}).get("swell_periodo"),
+                "chop_m": (m or {}).get("viento_ola_altura"),
+                "chop_periodo": (m or {}).get("viento_ola_periodo"),
+                "prob_precip": f_scoring.get("prob_precipitacion"),
+                "visibilidad_m": f.get("visibilidad"),
+                "nubosidad": f.get("nubosidad"),
+                "temperatura": f.get("temperatura"),
+            })
+
+        # Score del día: promedio + peor ventana 3h
+        scores_h = [h["score"] for h in horas]
+        promedio = sum(scores_h) / len(scores_h)
+        peor_ventana = None
+        peor_ventana_rango = None
+        if len(scores_h) >= 3:
+            min_avg = 999
+            for i in range(len(scores_h) - 2):
+                w = sum(scores_h[i:i+3]) / 3
+                if w < min_avg:
+                    min_avg = w
+                    peor_ventana_rango = {
+                        "inicio": horas[i]["hora"],
+                        "fin": horas[min(i+3, len(horas)-1)]["hora"],
+                    }
+            peor_ventana = min_avg
+        day_score_float = min(promedio, peor_ventana) if peor_ventana is not None else promedio
+        day_score = round(day_score_float)
+
+        # Componente más limitante (peor media)
+        comp_names = ["viento", "oleaje", "racha", "lluvia", "visibilidad", "nubosidad", "presion", "temperatura"]
+        avg_per_comp = {}
+        for c in comp_names:
+            vals = [h["componentes"].get(c) for h in horas if h["componentes"].get(c) is not None]
+            if vals:
+                avg_per_comp[c] = round(sum(vals) / len(vals), 1)
+
+        # Factores críticos: componentes con score medio ≤5, ordenados de peor a mejor
+        factores = []
+        for comp, avg in sorted(avg_per_comp.items(), key=lambda x: x[1]):
+            if avg <= 5:
+                factores.append({
+                    "factor": comp,
+                    "factor_label": COMP_LABEL.get(comp, comp),
+                    "score_medio": avg,
+                    "explicacion": _explain_componente(comp, horas),
+                })
+
+        # Reglas únicas aplicadas durante el día (de scoring.py, fuente de verdad)
+        reglas_set = []
+        for h in horas:
+            for r in h.get("reglas_aplicadas", []):
+                if r not in reglas_set:
+                    reglas_set.append(r)
+
+        # Regla decisiva para el score diario
+        regla_diaria = None
+        if peor_ventana is not None:
+            if abs(peor_ventana - promedio) < 0.01:
+                regla_diaria = f"Promedio de horas de luz = peor ventana 3h ({promedio:.1f})"
+            elif peor_ventana < promedio:
+                regla_diaria = (
+                    f"Peor ventana 3h = {peor_ventana:.1f} (menor que promedio {promedio:.1f}) "
+                    f"→ se toma la peor ventana como score del día"
+                )
+            else:
+                regla_diaria = (
+                    f"Promedio {promedio:.1f} (menor que peor ventana {peor_ventana:.1f}) → promedio gana"
+                )
+        else:
+            regla_diaria = f"Pocas horas para ventana 3h → promedio {promedio:.1f}"
+
+        label, color, recomendacion = LABELS[day_score]
+
+        return {
+            "fecha": date_str,
+            "label": day_label,
+            "disponible": True,
+            "score_dia": day_score,
+            "label_score": label,
+            "color": color,
+            "recomendacion": recomendacion,
+            "promedio_horas_luz": round(promedio, 1),
+            "peor_ventana_3h": round(peor_ventana, 1) if peor_ventana is not None else None,
+            "peor_ventana_rango": peor_ventana_rango,
+            "regla_diaria": regla_diaria,
+            "score_medio_componentes": avg_per_comp,
+            "factores_criticos": factores,
+            "reglas_aplicadas_dia": reglas_set,
+            "horas": horas,
+        }
+
+    result = []
+    for i in range(4):
+        d = now + timedelta(days=i)
+        date_str = d.strftime("%Y-%m-%d")
+        if i == 0:
+            label = "Hoy"
+        elif i == 1:
+            label = "Manana"
+        else:
+            label = DAY_NAMES[d.weekday()]
+        result.append(explain_day(date_str, label))
+
+    return {
+        "updated": _cache.get("timestamp"),
+        "pesos_componentes": WEIGHTS,
+        "days": result,
+    }
 
 
 # ─── Feedback ─────────────────────────────────────────────────────────────────
