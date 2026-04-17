@@ -370,6 +370,17 @@ async function loadSummary() {
     }
 }
 
+function skyEmoji(nub, lluvia) {
+    const n = nub ?? 50;
+    const l = lluvia ?? 0;
+    if (l >= 70) return '🌧️';
+    if (l >= 40) return '🌦️';
+    if (n >= 80) return '☁️';
+    if (n >= 50) return '⛅';
+    if (n >= 20) return '🌤️';
+    return '☀️';
+}
+
 function renderSummary(data) {
     summaryData = data;
     const container = document.getElementById('summaryCards');
@@ -384,9 +395,15 @@ function renderSummary(data) {
             </div>`;
         }
         const color = d.color || '#666';
+        const em = d.manana || d.tarde ? `
+            <div class="summary-sky">
+                <span title="Mañana (8-13h)">${d.manana ? skyEmoji(d.manana.nubosidad_media, d.manana.prob_lluvia_max) : '—'}</span>
+                <span title="Tarde (14-20h)">${d.tarde ? skyEmoji(d.tarde.nubosidad_media, d.tarde.prob_lluvia_max) : '—'}</span>
+            </div>` : '';
         return `<div class="summary-card clickable" style="border-top: 3px solid ${color}" onclick="goToForecastDay('${d.fecha}')">
             <div class="summary-day">${d.label}</div>
             <div class="summary-date">${formatDate(d.fecha)}</div>
+            ${em}
             <div class="summary-score" style="color: ${color}">${d.score_medio}</div>
             <div class="summary-label" style="color: ${color}">${d.label_score || ''}</div>
             <div class="summary-details">

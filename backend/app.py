@@ -704,6 +704,26 @@ async def api_summary():
             date_str, forecast, marine_by_hour, aemet_by_hour
         )
 
+        # Partes del día: mañana 8-13, tarde 14-20
+        morning_h = [f for f in daylight if 8 <= int(f.get("timestamp", "T00")[11:13]) <= 13]
+        afternoon_h = [f for f in daylight if 14 <= int(f.get("timestamp", "T00")[11:13]) <= 20]
+
+        def _parte_meteo(hours):
+            if not hours:
+                return None
+            nubs = [h.get("nubosidad") for h in hours if h.get("nubosidad") is not None]
+            probs = []
+            for h in hours:
+                ts = h.get("timestamp", "")[:13]
+                ae = aemet_by_hour.get(ts)
+                p = ae.get("prob_precipitacion") if ae and ae.get("prob_precipitacion") is not None else h.get("prob_precipitacion")
+                if p is not None:
+                    probs.append(p)
+            return {
+                "nubosidad_media": round(sum(nubs) / len(nubs)) if nubs else None,
+                "prob_lluvia_max": max(probs) if probs else None,
+            }
+
         vientos = [f.get("viento_nudos") for f in daylight if f.get("viento_nudos") is not None]
         viento_dirs = [f.get("viento_dir") for f in daylight if f.get("viento_dir") is not None]
         rachas = [f.get("viento_racha_nudos") for f in daylight if f.get("viento_racha_nudos") is not None]
@@ -757,6 +777,8 @@ async def api_summary():
             "temp_min": round(min(temps), 1) if temps else None,
             "temp_max": round(max(temps), 1) if temps else None,
             "mejor_ventana": best_window,
+            "manana": _parte_meteo(morning_h),
+            "tarde": _parte_meteo(afternoon_h),
         }
 
     result = {"updated": _cache.get("timestamp"), "days": []}

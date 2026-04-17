@@ -549,6 +549,13 @@ h2 {
     font-size: 0.65rem;
     padding-left: 0.5rem;
 }
+.summary-sky {
+    display: flex;
+    justify-content: center;
+    gap: 1.2rem;
+    margin: 0.5rem 0 0.3rem;
+}
+.summary-sky span { font-size: 1.7rem; line-height: 1; }
 .summary-window {
     margin-top: 0.5rem;
     font-size: 0.72rem;
