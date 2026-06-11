@@ -1,0 +1,435 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Prototipo 3D: efecto del periodo en una lancha</title>
+<style>
+  * { margin: 0; padding: 0; box-sizing: border-box; }
+  body {
+    font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
+    background: #0a1628; color: #e0e0e0; padding: 20px;
+    max-width: 1160px; margin: 0 auto;
+  }
+  h1 { color: #fff; font-size: 1.3rem; margin-bottom: 4px; }
+  .sub { color: #78909c; font-size: 0.85rem; margin-bottom: 14px; }
+  #scene { width: 100%; height: 480px; border-radius: 12px; overflow: hidden; position: relative; }
+  #scene canvas { display: block; }
+  #slamFlash {
+    position: absolute; top: 18px; left: 50%; transform: translateX(-50%);
+    color: #ff5252; font-weight: 800; font-size: 1.3rem; letter-spacing: 0.05em;
+    text-shadow: 0 2px 8px #000; opacity: 0; transition: opacity 0.15s;
+    pointer-events: none;
+  }
+  .controls {
+    display: flex; flex-wrap: wrap; gap: 18px; align-items: center;
+    background: #11203a; border-radius: 10px; padding: 12px 16px; margin: 12px 0;
+  }
+  .ctl { display: flex; flex-direction: column; gap: 2px; min-width: 150px; }
+  .ctl label { font-size: 0.72rem; color: #8895a7; text-transform: uppercase; letter-spacing: 0.04em; }
+  .ctl .val { color: #fff; font-weight: 600; font-size: 0.9rem; }
+  input[type=range] { width: 150px; accent-color: #3b82f6; }
+  .presets { display: flex; gap: 8px; flex-wrap: wrap; }
+  .presets button {
+    background: #1a2d47; color: #cfd8e3; border: 1px solid #2a4060;
+    border-radius: 6px; padding: 6px 10px; font-size: 0.78rem; cursor: pointer;
+  }
+  .presets button:hover { background: #234; border-color: #3b82f6; }
+  .readouts {
+    display: grid; grid-template-columns: repeat(auto-fit, minmax(140px, 1fr));
+    gap: 10px; margin-top: 12px;
+  }
+  .ro { background: #11203a; border-radius: 8px; padding: 10px 12px; }
+  .ro .k { font-size: 0.68rem; color: #8895a7; text-transform: uppercase; letter-spacing: 0.04em; }
+  .ro .v { font-size: 1.05rem; font-weight: 700; color: #fff; }
+  .ro .v small { font-weight: 400; color: #8895a7; }
+  #comentario {
+    margin-top: 12px; background: #11203a; border-left: 3px solid #3b82f6;
+    border-radius: 8px; padding: 10px 14px; font-size: 0.88rem; color: #cfd8e3;
+  }
+</style>
+</head>
+<body>
+
+<h1>Simulador: cómo afecta la ola a la lancha</h1>
+<p class="sub">Todo a escala real. Cambia altura, periodo, eslora, velocidad y rumbo — y arrastra para girar la cámara.</p>
+
+<div class="controls">
+  <div class="ctl">
+    <label>Altura de ola (H)</label>
+    <input type="range" id="inH" min="0.2" max="3" step="0.1" value="1.0">
+    <span class="val" id="vH">1.0 m</span>
+  </div>
+  <div class="ctl">
+    <label>Periodo (T)</label>
+    <input type="range" id="inT" min="2" max="14" step="0.5" value="4">
+    <span class="val" id="vT">4 s</span>
+  </div>
+  <div class="ctl">
+    <label>Eslora</label>
+    <input type="range" id="inE" min="4" max="14" step="0.5" value="6.5">
+    <span class="val" id="vE">6.5 m</span>
+  </div>
+  <div class="ctl">
+    <label>Velocidad</label>
+    <input type="range" id="inV" min="0" max="20" step="1" value="0">
+    <span class="val" id="vV">0 kn</span>
+  </div>
+  <div class="ctl">
+    <label>Rumbo</label>
+    <div class="presets">
+      <button id="btnProa" onclick="setDir(1)">Contra la ola</button>
+      <button id="btnPopa" onclick="setDir(-1)">Mar de popa</button>
+    </div>
+  </div>
+  <div class="presets">
+    <button onclick="preset(0.8, 3)">Chop 0.8m &middot; 3s</button>
+    <button onclick="preset(1.2, 4)">Chop duro 1.2m &middot; 4s</button>
+    <button onclick="preset(1.2, 8)">Fondo 1.2m &middot; 8s</button>
+    <button onclick="preset(2.0, 12)">Fondo largo 2m &middot; 12s</button>
+  </div>
+</div>
+
+<div id="scene"><div id="slamFlash">&iexcl;PANTOCAZO!</div></div>
+
+<div class="readouts">
+  <div class="ro"><div class="k">Longitud de ola</div><div class="v" id="roL">--</div></div>
+  <div class="ro"><div class="k">Periodo de encuentro</div><div class="v" id="roTe">--</div></div>
+  <div class="ro"><div class="k">Pendiente (H/L)</div><div class="v" id="roS">--</div></div>
+  <div class="ro"><div class="k">Olas por eslora</div><div class="v" id="roR">--</div></div>
+  <div class="ro"><div class="k">Banda</div><div class="v" id="roB">--</div></div>
+  <div class="ro"><div class="k">Pantocazos / min</div><div class="v" id="roP">0</div></div>
+</div>
+
+<div id="comentario"></div>
+
+<script type="importmap">
+{
+  "imports": {
+    "three": "https://unpkg.com/three@0.160.0/build/three.module.js",
+    "three/addons/": "https://unpkg.com/three@0.160.0/examples/jsm/"
+  }
+}
+</script>
+<script type="module">
+import * as THREE from 'three';
+import { OrbitControls } from 'three/addons/controls/OrbitControls.js';
+
+// ─── Parámetros (compartidos con la versión 2D) ──────────────────────────────
+let H = 1.0, T = 4, ESLORA = 6.5, VEL = 0, DIR = 1;
+
+function lambda() { return 1.56 * T * T; }
+function celerity() { return 1.56 * T; }
+function encounterSpeed() { return celerity() + DIR * VEL * 0.5144; }
+function encounterPeriod() {
+    const ce = Math.abs(encounterSpeed());
+    return ce < 0.05 ? Infinity : lambda() / ce;
+}
+// Las olas vienen de proa (+x) hacia popa: fase avanza hacia -x
+function surface(x, z, t) {
+    const L = lambda();
+    const th = 2 * Math.PI * (x + encounterSpeed() * t) / L;
+    const A = H / 2;
+    const sharp = Math.min(0.25, 2 * (H / L));
+    // pequeña variación lateral para que no parezca un cilindro perfecto
+    const lat = 1 + 0.06 * Math.sin(z * 0.35 + th * 0.3);
+    return A * (Math.sin(th) + sharp * 0.5 * Math.sin(2 * th)) * lat;
+}
+function slopeX(x, t) {
+    const d = 0.4;
+    return (surface(x + d, 0, t) - surface(x - d, 0, t)) / (2 * d);
+}
+function response() {
+    const r = lambda() / (3.2 * ESLORA);
+    return r * r / (1 + r * r);
+}
+
+// ─── Escena ──────────────────────────────────────────────────────────────────
+const container = document.getElementById('scene');
+const renderer = new THREE.WebGLRenderer({ antialias: true });
+renderer.setPixelRatio(Math.min(2, window.devicePixelRatio));
+renderer.setSize(container.clientWidth, container.clientHeight);
+container.appendChild(renderer.domElement);
+
+const scene = new THREE.Scene();
+scene.background = new THREE.Color(0x0c1c38);
+scene.fog = new THREE.Fog(0x0c1c38, 60, 140);
+
+const camera = new THREE.PerspectiveCamera(45, container.clientWidth / container.clientHeight, 0.1, 300);
+camera.position.set(14, 7, 22);
+
+const controls = new OrbitControls(camera, renderer.domElement);
+controls.target.set(0, 0, 0);
+controls.maxPolarAngle = Math.PI * 0.49;
+controls.minDistance = 8;
+controls.maxDistance = 80;
+
+scene.add(new THREE.HemisphereLight(0x8fb4d8, 0x0a1628, 0.75));
+const sun = new THREE.DirectionalLight(0xfff3d6, 1.6);
+sun.position.set(-30, 40, 20);
+scene.add(sun);
+const fill = new THREE.DirectionalLight(0x6aa9d8, 0.35);
+fill.position.set(25, 15, -30);
+scene.add(fill);
+
+// ─── Mar ─────────────────────────────────────────────────────────────────────
+const SEA_W = 160, SEA_D = 90, SEG_X = 220, SEG_Z = 60;
+const seaGeo = new THREE.PlaneGeometry(SEA_W, SEA_D, SEG_X, SEG_Z);
+seaGeo.rotateX(-Math.PI / 2);
+const seaMat = new THREE.MeshStandardMaterial({
+    color: 0x2266a0, roughness: 0.32, metalness: 0.28,
+    transparent: true, opacity: 0.97,
+});
+const sea = new THREE.Mesh(seaGeo, seaMat);
+scene.add(sea);
+
+function updateSea(t) {
+    const pos = seaGeo.attributes.position;
+    for (let i = 0; i < pos.count; i++) {
+        pos.setY(i, surface(pos.getX(i), pos.getZ(i), t));
+    }
+    pos.needsUpdate = true;
+    seaGeo.computeVertexNormals();
+}
+
+// ─── Lancha (primitivas, perfil tipo Antares) ────────────────────────────────
+const boat = new THREE.Group();
+{
+    // casco: perfil lateral extruido en manga
+    const s = new THREE.Shape();
+    s.moveTo(-3.25, 0.55);
+    s.lineTo(-3.25, -0.05);
+    s.lineTo(-1.6, -0.45);
+    s.lineTo(0.6, -0.48);
+    s.quadraticCurveTo(2.3, -0.35, 3.25, 0.62);
+    s.lineTo(3.0, 0.8);
+    s.lineTo(-3.25, 0.55);
+    const hullGeo = new THREE.ExtrudeGeometry(s, {
+        depth: 2.2, bevelEnabled: true, bevelSize: 0.18, bevelThickness: 0.22, bevelSegments: 3,
+    });
+    hullGeo.translate(0, 0, -1.1);
+    const hull = new THREE.Mesh(hullGeo, new THREE.MeshStandardMaterial({ color: 0xe8ecf4, roughness: 0.4 }));
+    boat.add(hull);
+
+    // cabina
+    const cab = new THREE.Mesh(
+        new THREE.BoxGeometry(2.4, 1.0, 1.7),
+        new THREE.MeshStandardMaterial({ color: 0x24405f, roughness: 0.5 }),
+    );
+    cab.position.set(0.2, 1.25, 0);
+    boat.add(cab);
+
+    // parabrisas inclinado
+    const wind = new THREE.Mesh(
+        new THREE.BoxGeometry(0.08, 0.85, 1.6),
+        new THREE.MeshStandardMaterial({ color: 0x67d6e8, roughness: 0.1, metalness: 0.3, transparent: true, opacity: 0.7 }),
+    );
+    wind.position.set(1.55, 1.2, 0);
+    wind.rotation.z = -0.35;
+    boat.add(wind);
+
+    // motor fueraborda
+    const motor = new THREE.Mesh(
+        new THREE.BoxGeometry(0.45, 0.7, 0.5),
+        new THREE.MeshStandardMaterial({ color: 0x222a33, roughness: 0.6 }),
+    );
+    motor.position.set(-3.45, 0.55, 0);
+    boat.add(motor);
+
+    // antena
+    const ant = new THREE.Mesh(
+        new THREE.CylinderGeometry(0.02, 0.02, 1.4),
+        new THREE.MeshStandardMaterial({ color: 0xcccccc }),
+    );
+    ant.position.set(-0.6, 2.4, 0.6);
+    boat.add(ant);
+}
+scene.add(boat);
+function boatScale() { boat.scale.setScalar(ESLORA / 6.5); }
+boatScale();
+
+// ─── Salpicaduras (puntos reciclados) ────────────────────────────────────────
+const NPART = 260;
+const pGeo = new THREE.BufferGeometry();
+const pPos = new Float32Array(NPART * 3);
+pGeo.setAttribute('position', new THREE.BufferAttribute(pPos, 3));
+const parts = [];
+for (let i = 0; i < NPART; i++) {
+    parts.push({ alive: false, vx: 0, vy: 0, vz: 0, life: 0 });
+    pPos[i * 3 + 1] = -50;
+}
+const pMat = new THREE.PointsMaterial({ color: 0xd9eefa, size: 0.16, transparent: true, opacity: 0.9 });
+scene.add(new THREE.Points(pGeo, pMat));
+
+function spawnSplash(xm, ym, intensity) {
+    let n = Math.round(14 + intensity * 16);
+    for (let i = 0; i < NPART && n > 0; i++) {
+        if (parts[i].alive) continue;
+        const p = parts[i];
+        p.alive = true;
+        p.life = 0.8 + Math.random() * 0.6;
+        pPos[i * 3] = xm + (Math.random() - 0.5) * 1.4;
+        pPos[i * 3 + 1] = ym;
+        pPos[i * 3 + 2] = (Math.random() - 0.5) * 2.2;
+        p.vx = (Math.random() - 0.5) * 3;
+        p.vy = 1.8 + Math.random() * 2.4 * intensity;
+        p.vz = (Math.random() - 0.5) * 3;
+        n--;
+    }
+}
+
+// ─── Dinámica de la lancha (idéntica a la 2D) ────────────────────────────────
+let boatZ = 0, boatPitch = 0, prevGap = [], lastSlam = 0;
+let slams = [];
+
+function hullPoints() {
+    const e = ESLORA / 2;
+    return [
+        [-e, -0.15], [-e * 0.5, -0.42], [0, -0.48], [e * 0.5, -0.38], [e * 0.85, -0.1], [e, 0.25],
+    ];
+}
+
+function step(t, dt) {
+    const R = response();
+    const targetZ = surface(0, 0, t) * R;
+    const targetPitch = Math.atan(slopeX(0, t)) * (0.4 + 0.6 * R);
+    const k = Math.min(1, dt * 4);
+    boatZ += (targetZ - boatZ) * k;
+    boatPitch += (targetPitch - boatPitch) * k;
+
+    const cosP = Math.cos(boatPitch), sinP = Math.sin(boatPitch);
+    const pts = hullPoints();
+    const gaps = pts.map(p => {
+        const wx = p[0] * cosP - p[1] * sinP;
+        const wz = boatZ + p[0] * sinP + p[1] * cosP;
+        return surface(wx, 0, t) - wz;
+    });
+    if (prevGap.length === gaps.length && dt > 0) {
+        const Te = Math.min(encounterPeriod(), 30);
+        for (let i = 2; i < gaps.length; i++) {
+            const closing = (gaps[i] - prevGap[i]) / dt;
+            if (gaps[i] > 0 && prevGap[i] <= 0 && closing > 0.25 && t - lastSlam > 0.5 * Te) {
+                lastSlam = t;
+                slams.push(t);
+                const p = pts[i];
+                const wx = p[0] * cosP - p[1] * sinP;
+                spawnSplash(wx, surface(wx, 0, t), Math.min(2.5, closing));
+                const flash = document.getElementById('slamFlash');
+                flash.style.opacity = 1;
+                setTimeout(() => { flash.style.opacity = 0; }, 450);
+            }
+        }
+    }
+    prevGap = gaps;
+    slams = slams.filter(s => t - s < 60);
+
+    // la lancha cabecea sobre el eje z (la eslora va en x)
+    boat.position.y = boatZ;
+    boat.rotation.z = boatPitch;
+}
+
+// ─── UI ──────────────────────────────────────────────────────────────────────
+function banda(T) {
+    if (T < 4) return ['picada', '#ff8a80'];
+    if (T < 7) return ['moderada', '#ffd180'];
+    if (T < 11) return ['tendida', '#b9f6ca'];
+    return ['larga', '#84ffff'];
+}
+
+function comentario() {
+    const L = lambda();
+    const ratio = L / ESLORA;
+    const parts = [];
+    if (ratio < 3.5) parts.push(`La ola mide ${L.toFixed(0)}m y la lancha ${ESLORA}m: no puede acompañar la superficie, la atraviesa — cada cresta es un golpe.`);
+    else if (ratio < 8) parts.push(`Con ${L.toFixed(0)}m de ola la lancha ya puede cabalgarla, con balanceo notable.`);
+    else parts.push(`La ola mide ${L.toFixed(0)}m: la lancha sube y baja suavemente, casi ni se nota navegando.`);
+    if (H / L > 0.045) parts.push('Pendiente fuerte: crestas rompiendo.');
+    if (T >= 11 && H >= 1.2) parts.push('Ojo: este mar de fondo "cómodo" descarga con violencia en bajos y bocana.');
+    const Te = encounterPeriod();
+    if (VEL > 0 && DIR === 1 && isFinite(Te) && Te < T * 0.75) {
+        parts.push(`A ${VEL}kn contra la ola la encuentras cada ${Te.toFixed(1)}s en vez de cada ${T}s: el mar se comprime — afloja y mejora.`);
+    }
+    if (DIR === -1 && !isFinite(Te)) {
+        parts.push('Navegas a la velocidad de la ola: la surfeas y casi no encuentras olas. Ojo al control del rumbo.');
+    } else if (DIR === -1 && VEL > 0 && isFinite(Te) && Te > T * 1.5) {
+        parts.push(`Mar de popa: el encuentro se alarga a ${Te.toFixed(1)}s — mucho más cómodo que de proa.`);
+    }
+    return parts.join(' ');
+}
+
+function updateReadouts() {
+    const L = lambda();
+    const Te = encounterPeriod();
+    document.getElementById('roL').innerHTML = L.toFixed(0) + ' <small>m</small>';
+    document.getElementById('roTe').innerHTML = isFinite(Te) ? Te.toFixed(1) + ' <small>s</small>' : '&infin; <small>(surfeando)</small>';
+    document.getElementById('roS').innerHTML = (100 * H / L).toFixed(1) + ' <small>%</small>';
+    document.getElementById('roR').innerHTML = (L / ESLORA).toFixed(1) + ' <small>esloras/ola</small>';
+    const [b, c] = banda(T);
+    const roB = document.getElementById('roB');
+    roB.textContent = b;
+    roB.style.color = c;
+    document.getElementById('roP').textContent = slams.length;
+    document.getElementById('comentario').textContent = comentario();
+}
+
+function syncLabels() {
+    document.getElementById('vH').textContent = H.toFixed(1) + ' m';
+    document.getElementById('vT').textContent = T + ' s';
+    document.getElementById('vE').textContent = ESLORA + ' m';
+    document.getElementById('vV').textContent = VEL + ' kn';
+    document.getElementById('btnProa').style.borderColor = DIR === 1 ? '#3b82f6' : '#2a4060';
+    document.getElementById('btnPopa').style.borderColor = DIR === -1 ? '#3b82f6' : '#2a4060';
+    boatScale();
+}
+
+window.setDir = d => { DIR = d; syncLabels(); };
+window.preset = (h, t) => {
+    H = h; T = t;
+    document.getElementById('inH').value = h;
+    document.getElementById('inT').value = t;
+    syncLabels();
+};
+document.getElementById('inH').addEventListener('input', e => { H = parseFloat(e.target.value); syncLabels(); });
+document.getElementById('inT').addEventListener('input', e => { T = parseFloat(e.target.value); syncLabels(); });
+document.getElementById('inE').addEventListener('input', e => { ESLORA = parseFloat(e.target.value); syncLabels(); });
+document.getElementById('inV').addEventListener('input', e => { VEL = parseInt(e.target.value, 10); syncLabels(); });
+
+window.addEventListener('resize', () => {
+    renderer.setSize(container.clientWidth, container.clientHeight);
+    camera.aspect = container.clientWidth / container.clientHeight;
+    camera.updateProjectionMatrix();
+});
+
+// ─── Bucle ───────────────────────────────────────────────────────────────────
+let prevMs = null;
+function loop(ms) {
+    if (prevMs === null) prevMs = ms;
+    const dt = Math.min(0.05, (ms - prevMs) / 1000);
+    prevMs = ms;
+    const t = ms / 1000;
+
+    step(t, dt);
+    updateSea(t);
+
+    for (let i = 0; i < NPART; i++) {
+        if (!parts[i].alive) continue;
+        const p = parts[i];
+        pPos[i * 3] += p.vx * dt;
+        pPos[i * 3 + 1] += p.vy * dt;
+        pPos[i * 3 + 2] += p.vz * dt;
+        p.vy -= 9.8 * dt;
+        p.life -= dt;
+        if (p.life <= 0) { p.alive = false; pPos[i * 3 + 1] = -50; }
+    }
+    pGeo.attributes.position.needsUpdate = true;
+
+    controls.update();
+    renderer.render(scene, camera);
+    updateReadouts();
+    requestAnimationFrame(loop);
+}
+syncLabels();
+requestAnimationFrame(loop);
+</script>
+</body>
+</html>

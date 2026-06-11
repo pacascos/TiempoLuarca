@@ -1248,6 +1248,12 @@ window.toggleSection = function(id) {
                 frame.src = 'https://rtsp.me/embed/Ti49NGnd/';
             }
         }
+        if (id === 'simulador') {
+            const frame = document.getElementById('simuladorFrame');
+            if (!frame.src || frame.src === '' || frame.src === window.location.href) {
+                frame.src = 'static/animacion_periodo_3d.html';
+            }
+        }
         if (id === 'rainradar') {
             initRainRadar();
         }
