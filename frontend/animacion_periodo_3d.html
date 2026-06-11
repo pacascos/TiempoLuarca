@@ -392,20 +392,23 @@ function step(t, dt) {
     const e = ESLORA / 2;
     const bowX = e * 0.92 * cosP;
     const bowSubmerg = surface(bowX, 0, t) - (boatZ + FLOAT + e * 0.92 * sinP - 0.25);
+    // La espuma de corte la pone TU velocidad: al pairo, casi nada;
+    // a 16kn la proa va escupiendo agua continuamente.
+    const velMs = VEL * 0.5144;
+    const cabeceo = Math.min(0.8, Math.abs(targetPitch - boatPitch) * 5);
     if (bowSubmerg > -0.1) {
-        const intensity = 0.25 + VEL / 14 + Math.min(1.2, Math.abs(encounterSpeed()) / 8)
-                        + Math.min(1, Math.abs(targetPitch - boatPitch) * 6);
-        sprayAccum += intensity * dt * 30;
+        const intensity = 0.05 + velMs / 3.5 + cabeceo * (0.25 + velMs / 8);
+        sprayAccum += intensity * dt * 26;
         while (sprayAccum >= 1) {
             sprayAccum -= 1;
             spawnSpray(bowX, surface(bowX, 0, t), intensity);
         }
     }
-    // estallido cuando la ola DA en la proa (la amura entra en el agua)
+    // estallido cuando la ola DA en la proa: tambien crece con la velocidad
     if (bowSubmerg > 0.08 && prevBowSubmerg <= 0 && t - lastBowBurst > 0.35 * Math.min(encounterPeriod(), 12)) {
         lastBowBurst = t;
-        const punch = Math.min(2.5, 0.8 + VEL / 8 + Math.abs(encounterSpeed()) / 8);
-        for (let n = 0; n < 16 + punch * 10; n++) spawnSpray(bowX, surface(bowX, 0, t) + 0.1, punch);
+        const punch = Math.min(2.5, 0.25 + velMs / 4 + Math.abs(encounterSpeed()) / 14);
+        for (let n = 0; n < 6 + punch * 13; n++) spawnSpray(bowX, surface(bowX, 0, t) + 0.1, punch);
     }
     prevBowSubmerg = bowSubmerg;
 }
