@@ -172,22 +172,25 @@ def _score_swell(altura_m: float, periodo_s: float | None) -> int:
 
 def _score_chop(altura_m: float, periodo_s: float | None) -> int:
     """Mar de viento (chop). Muy incómodo en barco pequeño.
-    0.3m ya se nota, 0.7m+ peligroso."""
+    0.3m ya se nota, 0.8m+ duro (aflojar), 1.3m+ muy duro, 1.6m+ no salir.
+    Calibrado con feedback real del patrón: 1.1-1.2m es castigo, no temporal."""
     if altura_m <= 0.1:
         base = 10
-    elif altura_m <= 0.15:
+    elif altura_m <= 0.2:
         base = 9
-    elif altura_m <= 0.25:
+    elif altura_m <= 0.3:
         base = 8
-    elif altura_m <= 0.4:
+    elif altura_m <= 0.45:
         base = 7
-    elif altura_m <= 0.5:
+    elif altura_m <= 0.6:
+        base = 6
+    elif altura_m <= 0.8:
         base = 5
-    elif altura_m <= 0.7:
-        base = 4
     elif altura_m <= 1.0:
-        base = 3
+        base = 4
     elif altura_m <= 1.3:
+        base = 3
+    elif altura_m <= 1.6:
         base = 2
     else:
         base = 1
@@ -384,9 +387,9 @@ LABELS = {
     6:  ("Aceptable", "#FFAB00", "Condiciones aceptables. Navega con atencion."),
     5:  ("Regular", "#FF6D00", "Condiciones regulares. Solo si tienes experiencia."),
     4:  ("Malo", "#FF3D00", "Condiciones desfavorables. Mejor quedarse en puerto."),
-    3:  ("Muy malo", "#E53935", "Condiciones muy malas. No se recomienda salir."),
-    2:  ("Peligroso", "#F44336", "Condiciones peligrosas. No salir."),
-    1:  ("Muy peligroso", "#EF5350", "Condiciones extremas. Prohibido navegar."),
+    3:  ("Muy malo", "#E53935", "Mar dura e incomoda. No se recomienda salir."),
+    2:  ("Pesimo", "#F44336", "Mar muy dura, castigo asegurado. No salir."),
+    1:  ("Peligroso", "#EF5350", "Condiciones peligrosas. No salir."),
 }
 
 

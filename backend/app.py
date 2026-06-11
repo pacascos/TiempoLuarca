@@ -288,7 +288,7 @@ def _explain_componente(comp: str, horas: list) -> str:
         swell_max = max(swells) if swells else 0
         if chop_max >= 0.7 and chop_max >= swell_max * 0.7:
             return (f"Mar de viento (chop) llega a {chop_max:.2f}m. "
-                    f"Escala: chop >0.7m → score 4, >1.0m → 3, >1.3m → 2. "
+                    f"Escala: chop >0.8m → score 4, >1.0m → 3, >1.3m → 2, >1.6m → 1. "
                     f"Con periodo corto (<4s) baja 1-2 puntos más por pantocazos.")
         if swell_max >= 1.3:
             return (f"Swell máximo {swell_max:.2f}m. "
