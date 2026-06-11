@@ -97,6 +97,14 @@
                     <span>Confort 6%</span><span>Estabilidad 6%</span>
                 </div>
                 <p>El oleaje distingue <strong>mar de fondo</strong> (swell, mas tolerable) de <strong>mar de viento</strong> (chop, mas incomodo).</p>
+                <p><strong>Periodo del oleaje</strong> (grafica de Oleaje): marca lo empinada y separada que viene la ola (longitud &asymp; 1.56&middot;T&sup2;).</p>
+                <div class="help-factors">
+                    <span>&lt;4s picada: pantocazos si el chop pasa de 0.4m</span>
+                    <span>4-7s moderada: incomoda, mojadura</span>
+                    <span>7-11s tendida: balanceo suave, comoda</span>
+                    <span>&gt;11s larga: suave fuera, pero rompe fuerte en bajos y bocana con bajamar</span>
+                </div>
+                <p>La <strong>potencia</strong> (area gris, kW/m) crece con altura&sup2; &times; periodo: una mar de fondo larga "que no se nota" puede llevar mas energia que un chop aparatoso — esa energia es lo que descarga al romper. Si el periodo del chop va subiendo con las horas, el mar se esta ordenando (mejora); si cae de golpe, hay viento fresco levantando mar nueva.</p>
                 <p>La <strong>presion</strong> mide la tendencia barometrica (6h). Caida rapida = borrasca acercandose.</p>
                 <p>Reglas de seguridad: si oleaje, viento, visibilidad o presion son muy malos, el score se limita.</p>
                 <p class="help-periods"><strong>Resumen</strong> = media 08:00-20:00 &middot; <strong>Mejor ventana</strong> = mejores 3h seguidas</p>
@@ -394,6 +402,6 @@
         <p>TiempoLuarca &middot; Datos: AEMET (Cabo Busto), Open-Meteo, IHM &middot; <a href="porque" style="color:var(--text-dim)">¿Por qué esa nota?</a> &middot; <a href="uso" style="color:var(--text-dim)">Uso</a></p>
     </footer>
 
-    <script src="static/app.js?v=59"></script>
+    <script src="static/app.js?v=60"></script>
 </body>
 </html>

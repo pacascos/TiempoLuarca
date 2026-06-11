@@ -1956,10 +1956,10 @@ function drawDetailChart(type) {
 
 // Bandas de periodo: qué significa cada rango para un barco pequeño
 const PERIOD_BANDS = [
-    { max: 4,  color: 'rgba(244, 67, 54, 0.12)',  label: 'picada' },
-    { max: 7,  color: 'rgba(255, 171, 0, 0.10)',  label: 'moderada' },
-    { max: 11, color: 'rgba(100, 221, 23, 0.08)', label: 'tendida' },
-    { max: 99, color: 'rgba(6, 182, 212, 0.08)',  label: 'larga' },
+    { max: 4,  color: 'rgba(244, 67, 54, 0.30)',  labelColor: '#ff8a80', label: 'picada' },
+    { max: 7,  color: 'rgba(255, 171, 0, 0.24)',  labelColor: '#ffd180', label: 'moderada' },
+    { max: 11, color: 'rgba(100, 221, 23, 0.18)', labelColor: '#b9f6ca', label: 'tendida' },
+    { max: 99, color: 'rgba(6, 182, 212, 0.18)',  labelColor: '#84ffff', label: 'larga' },
 ];
 
 function periodoDesc(t) {
@@ -2097,7 +2097,7 @@ function drawOleajeChart(hours48, ctx, W, H) {
         const hi = Math.min(b.max, maxT);
         ctx.fillStyle = b.color;
         ctx.fillRect(pad.left, yBot(hi), plotW, yBot(prevT) - yBot(hi));
-        ctx.fillStyle = '#8895a7';
+        ctx.fillStyle = b.labelColor;
         ctx.font = '9px -apple-system, sans-serif';
         ctx.textAlign = 'left';
         ctx.fillText(b.label, pad.left + plotW + 5, (yBot(hi) + yBot(prevT)) / 2 + 3);
