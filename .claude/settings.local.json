@@ -93,7 +93,8 @@
       "Bash(dig +short api.open-meteo.com)",
       "Bash(pkill -f \"until curl -s http://localhost:8000/api/cache-status\")",
       "Bash(pkill -f \"uvicorn backend.app:app --port 8000\")",
-      "Bash(.venv/bin/uvicorn backend.app:app --port 8000)"
+      "Bash(.venv/bin/uvicorn backend.app:app --port 8000)",
+      "Bash(pkill -f \"http.server 8810\")"
     ]
   }
 }
