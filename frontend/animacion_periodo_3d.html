@@ -192,56 +192,98 @@ function updateSea(t) {
     seaGeo.computeVertexNormals();
 }
 
-// ─── Lancha (primitivas, perfil tipo Antares) ────────────────────────────────
+// ─── Lancha (estilo Antares: proa afilada, cabina con ventanas, pasamanos) ───
 const boat = new THREE.Group();
 {
-    // casco: perfil lateral extruido en manga
-    const s = new THREE.Shape();
-    s.moveTo(-3.25, 0.55);
-    s.lineTo(-3.25, -0.05);
-    s.lineTo(-1.6, -0.45);
-    s.lineTo(0.6, -0.48);
-    s.quadraticCurveTo(2.3, -0.35, 3.25, 0.62);
-    s.lineTo(3.0, 0.8);
-    s.lineTo(-3.25, 0.55);
-    const hullGeo = new THREE.ExtrudeGeometry(s, {
-        depth: 2.2, bevelEnabled: true, bevelSize: 0.18, bevelThickness: 0.22, bevelSegments: 3,
+    const white = new THREE.MeshStandardMaterial({ color: 0xeef2f7, roughness: 0.35 });
+    const navy  = new THREE.MeshStandardMaterial({ color: 0x24405f, roughness: 0.5 });
+    const glass = new THREE.MeshStandardMaterial({ color: 0x16283f, roughness: 0.12, metalness: 0.4 });
+    const dark  = new THREE.MeshStandardMaterial({ color: 0x222a33, roughness: 0.6 });
+    const inox  = new THREE.MeshStandardMaterial({ color: 0xb9c4cf, roughness: 0.25, metalness: 0.85 });
+
+    // casco: planta (vista cenital) extruida en vertical → proa afilada, popa recta
+    const plan = new THREE.Shape();
+    plan.moveTo(-3.25, -1.05);
+    plan.lineTo(-3.25, 1.05);
+    plan.quadraticCurveTo(-0.8, 1.28, 0.6, 1.1);
+    plan.quadraticCurveTo(2.5, 0.75, 3.25, 0);
+    plan.quadraticCurveTo(2.5, -0.75, 0.6, -1.1);
+    plan.quadraticCurveTo(-0.8, -1.28, -3.25, -1.05);
+    const hullGeo = new THREE.ExtrudeGeometry(plan, {
+        depth: 0.75, bevelEnabled: true, bevelSize: 0.2, bevelThickness: 0.2, bevelSegments: 3,
     });
-    hullGeo.translate(0, 0, -1.1);
-    const hull = new THREE.Mesh(hullGeo, new THREE.MeshStandardMaterial({ color: 0xe8ecf4, roughness: 0.4 }));
-    boat.add(hull);
+    hullGeo.rotateX(-Math.PI / 2);   // la extrusión pasa a ser la altura
+    hullGeo.translate(0, -0.4, 0);   // bajo del casco ~-0.6, borda ~+0.55
+    // fondo en V (astilla muerta): la quilla baja y sube hacia los pantoques
+    {
+        const hp = hullGeo.attributes.position;
+        for (let i = 0; i < hp.count; i++) {
+            const y = hp.getY(i);
+            if (y < 0.25) {
+                const z = hp.getZ(i), x = hp.getX(i);
+                const haciaQuilla = Math.max(0, 1 - Math.abs(z) / 1.2);
+                const soloFondo = Math.min(1, (0.25 - y) / 0.55);
+                const haciaProa = 1 - Math.max(0, (x - 2.2) / 1.1);  // el pie de proa sube
+                hp.setY(i, y - 0.38 * haciaQuilla * soloFondo * Math.max(0.25, haciaProa));
+            }
+        }
+        hp.needsUpdate = true;
+        hullGeo.computeVertexNormals();
+    }
+    boat.add(new THREE.Mesh(hullGeo, white));
 
-    // cabina
-    const cab = new THREE.Mesh(
-        new THREE.BoxGeometry(2.4, 1.0, 1.7),
-        new THREE.MeshStandardMaterial({ color: 0x24405f, roughness: 0.5 }),
-    );
-    cab.position.set(0.2, 1.25, 0);
-    boat.add(cab);
+    // cinta de defensa (línea oscura bajo la borda)
+    const rubGeo = new THREE.ExtrudeGeometry(plan, { depth: 0.08, bevelEnabled: false });
+    rubGeo.rotateX(-Math.PI / 2);
+    rubGeo.translate(0, 0.32, 0);
+    const rub = new THREE.Mesh(rubGeo, navy);
+    rub.scale.set(1.01, 1, 1.01);
+    boat.add(rub);
 
-    // parabrisas inclinado
-    const wind = new THREE.Mesh(
-        new THREE.BoxGeometry(0.08, 0.85, 1.6),
-        new THREE.MeshStandardMaterial({ color: 0x67d6e8, roughness: 0.1, metalness: 0.3, transparent: true, opacity: 0.7 }),
-    );
-    wind.position.set(1.55, 1.2, 0);
-    wind.rotation.z = -0.35;
+    // cabina: base, banda de ventanas y techo con alero
+    const cabBase = new THREE.Mesh(new THREE.BoxGeometry(2.5, 0.55, 1.75), white);
+    cabBase.position.set(-0.1, 0.82, 0);
+    boat.add(cabBase);
+    const winBand = new THREE.Mesh(new THREE.BoxGeometry(2.35, 0.5, 1.62), glass);
+    winBand.position.set(-0.05, 1.33, 0);
+    boat.add(winBand);
+    const roof = new THREE.Mesh(new THREE.BoxGeometry(2.85, 0.1, 1.95), white);
+    roof.position.set(0.05, 1.62, 0);
+    boat.add(roof);
+
+    // parabrisas inclinado delante de la cabina
+    const wind = new THREE.Mesh(new THREE.BoxGeometry(0.06, 0.72, 1.55), glass);
+    wind.position.set(1.32, 1.28, 0);
+    wind.rotation.z = -0.38;
     boat.add(wind);
 
-    // motor fueraborda
-    const motor = new THREE.Mesh(
-        new THREE.BoxGeometry(0.45, 0.7, 0.5),
-        new THREE.MeshStandardMaterial({ color: 0x222a33, roughness: 0.6 }),
-    );
-    motor.position.set(-3.45, 0.55, 0);
-    boat.add(motor);
+    // pasamanos de proa en inox
+    function tube(ax, ay, az, bx, by, bz, r = 0.035) {
+        const a = new THREE.Vector3(ax, ay, az), b = new THREE.Vector3(bx, by, bz);
+        const v = new THREE.Vector3().subVectors(b, a);
+        const m = new THREE.Mesh(new THREE.CylinderGeometry(r, r, v.length(), 8), inox);
+        m.position.copy(a).addScaledVector(v, 0.5);
+        m.quaternion.setFromUnitVectors(new THREE.Vector3(0, 1, 0), v.clone().normalize());
+        return m;
+    }
+    for (const side of [1, -1]) {
+        boat.add(tube(1.5, 0.95, 0.85 * side, 3.1, 0.95, 0.12 * side));   // tramo alto
+        boat.add(tube(1.5, 0.55, 0.85 * side, 1.5, 0.95, 0.85 * side));   // candelero popa
+        boat.add(tube(2.4, 0.55, 0.52 * side, 2.4, 0.95, 0.52 * side));   // candelero medio
+    }
+    boat.add(tube(3.1, 0.62, 0.12, 3.1, 0.62, -0.12, 0.03));
 
-    // antena
-    const ant = new THREE.Mesh(
-        new THREE.CylinderGeometry(0.02, 0.02, 1.4),
-        new THREE.MeshStandardMaterial({ color: 0xcccccc }),
-    );
-    ant.position.set(-0.6, 2.4, 0.6);
+    // motor fueraborda
+    const motor = new THREE.Mesh(new THREE.BoxGeometry(0.42, 0.65, 0.48), dark);
+    motor.position.set(-3.5, 0.45, 0);
+    boat.add(motor);
+    const motorCola = new THREE.Mesh(new THREE.BoxGeometry(0.12, 0.6, 0.1), dark);
+    motorCola.position.set(-3.5, -0.15, 0);
+    boat.add(motorCola);
+
+    // antena VHF
+    const ant = new THREE.Mesh(new THREE.CylinderGeometry(0.02, 0.02, 1.3), inox);
+    ant.position.set(-0.8, 2.3, 0.65);
     boat.add(ant);
 }
 scene.add(boat);
@@ -258,7 +300,7 @@ for (let i = 0; i < NPART; i++) {
     parts.push({ alive: false, vx: 0, vy: 0, vz: 0, life: 0 });
     pPos[i * 3 + 1] = -50;
 }
-const pMat = new THREE.PointsMaterial({ color: 0xd9eefa, size: 0.16, transparent: true, opacity: 0.9 });
+const pMat = new THREE.PointsMaterial({ color: 0xeaf6ff, size: 0.34, transparent: true, opacity: 0.95 });
 scene.add(new THREE.Points(pGeo, pMat));
 
 function spawnSplash(xm, ym, intensity) {
@@ -279,6 +321,7 @@ function spawnSplash(xm, ym, intensity) {
 }
 
 // ─── Dinámica de la lancha (idéntica a la 2D) ────────────────────────────────
+const FLOAT = 0.3;  // compensa el bisel del casco: linea de flotacion realista
 let boatZ = 0, boatPitch = 0, prevGap = [], lastSlam = 0;
 let slams = [];
 
@@ -301,7 +344,7 @@ function step(t, dt) {
     const pts = hullPoints();
     const gaps = pts.map(p => {
         const wx = p[0] * cosP - p[1] * sinP;
-        const wz = boatZ + p[0] * sinP + p[1] * cosP;
+        const wz = boatZ + FLOAT + p[0] * sinP + p[1] * cosP;
         return surface(wx, 0, t) - wz;
     });
     if (prevGap.length === gaps.length && dt > 0) {
@@ -324,8 +367,41 @@ function step(t, dt) {
     slams = slams.filter(s => t - s < 60);
 
     // la lancha cabecea sobre el eje z (la eslora va en x)
-    boat.position.y = boatZ;
+    boat.position.y = boatZ + FLOAT;
     boat.rotation.z = boatPitch;
+
+    // ─── Rociones de proa: el casco cortando el agua ───
+    // intensidad: velocidad de la lancha + mar de encuentro + cabeceo
+    const e = ESLORA / 2;
+    const bowX = e * 0.92 * cosP;
+    const bowSubmerg = surface(bowX, 0, t) - (boatZ + FLOAT + e * 0.92 * sinP - 0.25);
+    if (bowSubmerg > -0.1) {
+        const intensity = 0.25 + VEL / 14 + Math.min(1.2, Math.abs(encounterSpeed()) / 8)
+                        + Math.min(1, Math.abs(targetPitch - boatPitch) * 6);
+        sprayAccum += intensity * dt * 22;
+        while (sprayAccum >= 1) {
+            sprayAccum -= 1;
+            spawnSpray(bowX, surface(bowX, 0, t), intensity);
+        }
+    }
+}
+
+let sprayAccum = 0;
+function spawnSpray(xm, ym, intensity) {
+    for (let i = 0; i < NPART; i++) {
+        if (parts[i].alive) continue;
+        const p = parts[i];
+        const side = Math.random() < 0.5 ? 1 : -1;
+        p.alive = true;
+        p.life = 0.45 + Math.random() * 0.4;
+        pPos[i * 3] = xm + Math.random() * 0.5;
+        pPos[i * 3 + 1] = ym + 0.05;
+        pPos[i * 3 + 2] = side * (0.3 + Math.random() * 0.4);
+        p.vx = 0.4 + Math.random() * 1.2;
+        p.vy = 0.6 + Math.random() * 1.4 * Math.min(2, intensity);
+        p.vz = side * (0.8 + Math.random() * 1.8);
+        return;
+    }
 }
 
 // ─── UI ──────────────────────────────────────────────────────────────────────
