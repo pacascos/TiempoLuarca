@@ -295,7 +295,7 @@ function boatScale() { boat.scale.setScalar(ESLORA / 6.5); }
 boatScale();
 
 // ─── Salpicaduras (puntos reciclados) ────────────────────────────────────────
-const NPART = 260;
+const NPART = 560;
 const pGeo = new THREE.BufferGeometry();
 const pPos = new Float32Array(NPART * 3);
 pGeo.setAttribute('position', new THREE.BufferAttribute(pPos, 3));
@@ -422,15 +422,46 @@ function step(t, dt) {
         for (let n = 0; n < 6 + punch * 13; n++) spawnSpray(bowX, surface(bowX, 0, t) + 0.1, punch);
     }
     prevBowSubmerg = bowSubmerg;
+
+    // ─── Estela: espuma que queda atras de la popa, crece con la velocidad ───
+    if (VEL > 1) {
+        wakeAccum += dt * (3 + velMs * 7);
+        while (wakeAccum >= 1) {
+            wakeAccum -= 1;
+            spawnWake(velMs, e);
+        }
+    }
 }
 
-let sprayAccum = 0, prevBowSubmerg = -1, lastBowBurst = 0;
+let sprayAccum = 0, prevBowSubmerg = -1, lastBowBurst = 0, wakeAccum = 0;
+
+function spawnWake(velMs, e) {
+    for (let i = 0; i < NPART; i++) {
+        if (parts[i].alive) continue;
+        const p = parts[i];
+        // 35%: brazos en V (estela Kelvin, ~19°) desde las aletas de popa.
+        // 65%: chorro central del motor (prop wash), recto y denso.
+        const brazoV = Math.random() < 0.35;
+        const side = Math.random() < 0.5 ? 1 : -1;
+        p.alive = true;
+        p.wake = true;
+        p.life = (brazoV ? 1.8 : 1.3) + Math.random() * 1.5;
+        pPos[i * 3] = -e * 0.95 - Math.random() * 0.3;
+        pPos[i * 3 + 1] = 0;
+        pPos[i * 3 + 2] = brazoV ? side * 0.8 : side * Math.random() * 0.14;
+        p.vx = -(velMs * (brazoV ? 0.85 : 1.05) + 0.2);   // el chorro del motor sale mas rapido
+        p.vy = 0;
+        p.vz = brazoV ? side * velMs * 0.34 : side * velMs * (0.01 + Math.random() * 0.04);
+        return;
+    }
+}
 function spawnSpray(xm, ym, intensity) {
     for (let i = 0; i < NPART; i++) {
         if (parts[i].alive) continue;
         const p = parts[i];
         const side = Math.random() < 0.5 ? 1 : -1;
         p.alive = true;
+        p.wake = false;
         p.life = 0.7 + Math.random() * 0.55;
         pPos[i * 3] = xm + Math.random() * 0.6;
         pPos[i * 3 + 1] = ym + 0.18;
@@ -531,9 +562,14 @@ function loop(ms) {
         if (!parts[i].alive) continue;
         const p = parts[i];
         pPos[i * 3] += p.vx * dt;
-        pPos[i * 3 + 1] += p.vy * dt;
         pPos[i * 3 + 2] += p.vz * dt;
-        p.vy -= 9.8 * dt;
+        if (p.wake) {
+            // espuma de estela: pegada a la superficie, se difumina
+            pPos[i * 3 + 1] = surface(pPos[i * 3], pPos[i * 3 + 2], t) + 0.05;
+        } else {
+            pPos[i * 3 + 1] += p.vy * dt;
+            p.vy -= 9.8 * dt;
+        }
         p.life -= dt;
         if (p.life <= 0) { p.alive = false; pPos[i * 3 + 1] = -50; }
     }
