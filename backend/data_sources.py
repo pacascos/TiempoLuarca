@@ -19,7 +19,7 @@ from backend.config import (
     AEMET_MUNICIPIO_VALDES, AEMET_COSTA_CAN1, AEMET_PLAYA_LUARCA,
     IHM_BASE_URL, IHM_STATION_NAVIA, IHM_STATION_CUDILLERO,
     OPEN_METEO_MARINE_URL, OPEN_METEO_FORECAST_URL,
-    LUARCA_LAT, LUARCA_LON,
+    LUARCA_LAT, LUARCA_LON, MAR_LAT, MAR_LON,
 )
 
 logger = logging.getLogger(__name__)
@@ -509,6 +509,36 @@ async def _get_arome_wind(client: httpx.AsyncClient) -> dict:
     return arome_by_hour
 
 
+async def _get_viento_mar(client: httpx.AsyncClient) -> dict:
+    """Viento en el punto de mar abierto (~10 nm), donde se calcula el oleaje.
+    Con NE la costa queda abrigada y el viento de tierra engaña: aquí puede
+    soplar 4x más. Solo informativo, no entra en el score (salidas costeras).
+    Devuelve {timestamp: {viento_mar_nudos, viento_mar_racha_nudos}}."""
+    by_hour = {}
+    try:
+        r = await client.get(OPEN_METEO_FORECAST_URL, params={
+            "latitude": MAR_LAT,
+            "longitude": MAR_LON,
+            "hourly": "wind_speed_10m,wind_gusts_10m",
+            "timezone": "Europe/Madrid",
+            "forecast_days": 7,
+            "wind_speed_unit": "kn",
+        })
+        r.raise_for_status()
+        hourly = r.json().get("hourly", {})
+        for i, t in enumerate(hourly.get("time", [])):
+            v = hourly.get("wind_speed_10m", [None])[i]
+            if v is None:
+                continue
+            by_hour[t] = {
+                "viento_mar_nudos": v,
+                "viento_mar_racha_nudos": hourly.get("wind_gusts_10m", [None])[i],
+            }
+    except Exception as e:
+        logger.warning("Viento de mar abierto no disponible: %s", e)
+    return by_hour
+
+
 async def get_open_meteo_forecast() -> list | None:
     """Pronóstico meteorológico horario desde Open-Meteo.
     El viento de las primeras ~48h se sustituye por AROME HD (1.5km) si responde."""
@@ -526,6 +556,7 @@ async def get_open_meteo_forecast() -> list | None:
             r.raise_for_status()
             data = r.json()
             arome_by_hour = await _get_arome_wind(client)
+            mar_by_hour = await _get_viento_mar(client)
 
         hourly = data.get("hourly", {})
         times = hourly.get("time", [])
@@ -553,6 +584,9 @@ async def get_open_meteo_forecast() -> list | None:
                 if ar["viento_racha_nudos"] is not None:
                     entry["viento_racha_nudos"] = ar["viento_racha_nudos"]
                 entry["fuente_viento"] = "AROME 1.5km"
+            mar = mar_by_hour.get(t)
+            if mar:
+                entry.update(mar)
             result.append(entry)
         return result
     except Exception as e:

@@ -285,10 +285,13 @@
 
     (async () => {
         try {
-            const resp = await fetch('api/summary-explain');
+            // Mismo modo de navegación que la página principal (toggle Costera/Altura)
+            const modo = localStorage.getItem('modoNav') || 'costera';
+            const resp = await fetch('api/summary-explain?modo=' + modo);
             if (!resp.ok) throw new Error('HTTP ' + resp.status);
             const data = await resp.json();
-            document.getElementById('updated').textContent = 'Actualizado: ' + (data.updated || '').replace('T', ' ').slice(0, 16);
+            const modoTxt = modo === 'altura' ? ' · Modo: altura ~12nm (viento de mar abierto)' : ' · Modo: costera';
+            document.getElementById('updated').textContent = 'Actualizado: ' + (data.updated || '').replace('T', ' ').slice(0, 16) + modoTxt;
             document.getElementById('days').innerHTML = (data.days || []).map(renderDay).join('');
             document.getElementById('loading').style.display = 'none';
         } catch (e) {

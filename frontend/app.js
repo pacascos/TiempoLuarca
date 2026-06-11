@@ -43,6 +43,20 @@ let selectedDate = null;
 let currentData = null;
 let summaryData = null;
 let windUnit = localStorage.getItem('windUnit') || 'kn'; // 'kn' o 'kmh'
+let modoNav = localStorage.getItem('modoNav') || 'costera'; // 'costera' o 'altura'
+
+// Endpoints cuyo score depende del modo de navegación
+function apiUrlModo(path) { return apiUrl(path) + '?modo=' + modoNav; }
+
+window.setModo = function(modo) {
+    if (modo === modoNav) return;
+    modoNav = modo;
+    localStorage.setItem('modoNav', modo);
+    document.querySelectorAll('.mode-btn').forEach(b => {
+        b.classList.toggle('active', b.dataset.modo === modo);
+    });
+    loadAll(); // re-fetch: el backend recalcula el score con el viento del modo
+};
 
 function knToDisplay(kn) {
     if (kn == null) return null;
@@ -66,9 +80,12 @@ window.setUnit = function(unit) {
 // ─── Init ────────────────────────────────────────────────────────────────────
 
 document.addEventListener('DOMContentLoaded', () => {
-    // Restaurar unidad guardada
-    document.querySelectorAll('.unit-btn').forEach(b => {
+    // Restaurar unidad y modo guardados
+    document.querySelectorAll('.unit-btn:not(.mode-btn)').forEach(b => {
         b.classList.toggle('active', b.dataset.unit === windUnit);
+    });
+    document.querySelectorAll('.mode-btn').forEach(b => {
+        b.classList.toggle('active', b.dataset.modo === modoNav);
     });
     loadAll();
     setupFeedbackForm();
@@ -90,7 +107,7 @@ async function loadAll() {
 
 async function loadCurrent() {
     try {
-        const res = await fetch(apiUrl('api/current'));
+        const res = await fetch(apiUrlModo('api/current'));
         const data = await res.json();
         renderAlerts(data.alertas || []);
         renderCurrent(data);
@@ -361,7 +378,7 @@ function windDirLabel(degrees) {
 
 async function loadSummary() {
     try {
-        const res = await fetch(apiUrl('api/summary'));
+        const res = await fetch(apiUrlModo('api/summary'));
         const data = await res.json();
         renderSummary(data);
     } catch (e) {
@@ -434,7 +451,7 @@ function formatDate(dateStr) {
 
 async function loadForecast() {
     try {
-        const res = await fetch(apiUrl('api/forecast'));
+        const res = await fetch(apiUrlModo('api/forecast'));
         const data = await res.json();
         forecastData = data.forecast || [];
         renderForecastTabs();
@@ -675,7 +692,7 @@ function formatNum(v) {
 
 async function loadExtended() {
     try {
-        const res = await fetch(apiUrl('api/extended'));
+        const res = await fetch(apiUrlModo('api/extended'));
         const data = await res.json();
         renderExtended(data.days || []);
     } catch (e) {

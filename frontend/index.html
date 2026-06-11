@@ -10,7 +10,7 @@
         const basePath = window.location.pathname.endsWith('/') ? window.location.pathname : window.location.pathname + '/';
         window.__BASE = basePath;
     </script>
-    <link rel="stylesheet" href="static/styles.css?v=56">
+    <link rel="stylesheet" href="static/styles.css?v=57">
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/weather-icons/2.0.12/css/weather-icons.min.css">
     <link rel="preconnect" href="https://fonts.googleapis.com">
     <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800;900&display=swap" rel="stylesheet">
@@ -51,6 +51,10 @@
                 </div>
             </div>
             <span class="last-update" id="lastUpdate"></span>
+            <div class="unit-toggle" title="Costera: viento en la costa. Altura: viento a ~12nm mar adentro (puede ser mucho mayor)">
+                <button class="unit-btn mode-btn active" data-modo="costera" onclick="setModo('costera')">Costera</button>
+                <button class="unit-btn mode-btn" data-modo="altura" onclick="setModo('altura')">Altura 12nm</button>
+            </div>
             <div class="unit-toggle">
                 <button class="unit-btn active" data-unit="kn" onclick="setUnit('kn')">Nudos</button>
                 <button class="unit-btn" data-unit="kmh" onclick="setUnit('kmh')">km/h</button>
@@ -389,6 +393,6 @@
         <p>TiempoLuarca &middot; Datos: AEMET (Cabo Busto), Open-Meteo, IHM &middot; <a href="porque" style="color:var(--text-dim)">¿Por qué esa nota?</a> &middot; <a href="uso" style="color:var(--text-dim)">Uso</a></p>
     </footer>
 
-    <script src="static/app.js?v=56"></script>
+    <script src="static/app.js?v=57"></script>
 </body>
 </html>

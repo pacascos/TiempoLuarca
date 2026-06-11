@@ -13,6 +13,12 @@ ROOT_PATH = os.getenv("ROOT_PATH", "")  # ej: "/tiempo" si se sirve bajo subpath
 LUARCA_LAT = 43.5414
 LUARCA_LON = -6.5361
 
+# Punto de mar abierto (~10 nm fuera): la celda marina de Open-Meteo donde se
+# calcula el oleaje. Con NE la costa queda abrigada pero aquí sopla mucho más;
+# se usa solo como dato informativo (las salidas habituales son costeras).
+MAR_LAT = 43.71
+MAR_LON = -6.54
+
 # AEMET
 AEMET_BASE_URL = "https://opendata.aemet.es/opendata/api"
 AEMET_STATION_BUSTO = "1283U"

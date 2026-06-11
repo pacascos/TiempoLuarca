@@ -121,6 +121,25 @@ _DIR_DEGREES = {
 }
 
 
+def _aplica_modo(forecast: list, modo: str) -> list:
+    """Modo de navegación: 'costera' usa el viento del punto de costa (defecto);
+    'altura' (salidas a ~12nm) lo sustituye por el viento del punto de mar
+    abierto, que con NE puede ser 4x mayor que en la costa abrigada."""
+    if modo != "altura":
+        return forecast
+    result = []
+    for f in forecast:
+        if f.get("viento_mar_nudos") is not None:
+            f = {
+                **f,
+                "viento_nudos": f["viento_mar_nudos"],
+                "viento_racha_nudos": f.get("viento_mar_racha_nudos") or f.get("viento_racha_nudos"),
+                "fuente_viento": "Mar abierto (~12nm)",
+            }
+        result.append(f)
+    return result
+
+
 def _forecast_efectivo() -> list:
     """Forecast horario de Open-Meteo; si no está disponible (caída de la API),
     fallback con la predicción horaria de AEMET Valdés (48h) para que el score
@@ -376,14 +395,14 @@ async def api_usage():
 # ─── API Endpoints ────────────────────────────────────────────────────────────
 
 @app.get("/api/current")
-async def api_current():
+async def api_current(modo: str = "costera"):
     """Datos actuales y score."""
     if not _cache:
         raise HTTPException(503, "Datos no disponibles todavía")
 
     obs = _cache.get("observacion_busto")
     marine = _cache.get("oleaje") or []
-    forecast = _forecast_efectivo()
+    forecast = _aplica_modo(_forecast_efectivo(), modo)
 
     # Encontrar datos marinos y forecast más cercanos a ahora
     now = now_local()
@@ -411,11 +430,11 @@ async def api_current():
             scored = score_forecast_hour(fc_h, marine_by_hour.get(h_str))
             hour_scores.append(scored["score"])
 
-    # Para la hora actual, preferir datos de AEMET si hay
+    # Para la hora actual, preferir datos de AEMET si hay.
+    # En modo altura la observación costera engaña: usar el forecast de mar abierto.
     score_data = None
     if (obs or current_forecast) and hour_scores:
-        # Score actual con AEMET (más preciso)
-        if obs:
+        if obs and (modo != "altura" or not current_forecast):
             viento = obs.get("viento_vel_nudos")
             racha = obs.get("viento_racha_nudos")
             # AEMET da visibilidad en km; 0 es válido (niebla cerrada)
@@ -424,6 +443,8 @@ async def api_current():
             viento = current_forecast.get("viento_nudos") if current_forecast else None
             racha = current_forecast.get("viento_racha_nudos") if current_forecast else None
             vis = current_forecast.get("visibilidad") if current_forecast else None
+            if obs and obs.get("visibilidad") is not None:
+                vis = obs["visibilidad"] * 1000
 
         inp = ScoringInput(
             viento_nudos=viento,
@@ -549,12 +570,12 @@ async def api_current():
 
 
 @app.get("/api/forecast")
-async def api_forecast():
+async def api_forecast(modo: str = "costera"):
     """Pronóstico horario con scores para los próximos 7 días."""
     if not _cache:
         raise HTTPException(503, "Datos no disponibles todavía")
 
-    forecast = _forecast_efectivo()
+    forecast = _aplica_modo(_forecast_efectivo(), modo)
 
     # Lluvia de AEMET Valdés (más fiable que Open-Meteo) + datos marinos por hora
     aemet_by_hour = _index_aemet_by_hour(_cache.get("prediccion_valdes"))
@@ -600,6 +621,7 @@ async def api_forecast():
             "viento_nudos": f.get("viento_nudos"),
             "viento_dir": f.get("viento_dir"),
             "viento_racha_nudos": f.get("viento_racha_nudos"),
+            "viento_mar_nudos": f.get("viento_mar_nudos"),
             "fuente_viento": f.get("fuente_viento"),
             "prob_precipitacion": prob_precip,
             "precipitacion": f.get("precipitacion"),
@@ -630,12 +652,12 @@ async def api_tides():
 
 
 @app.get("/api/summary")
-async def api_summary():
+async def api_summary(modo: str = "costera"):
     """Resumen para hoy, mañana y próximo fin de semana."""
     if not _cache:
         raise HTTPException(503, "Datos no disponibles todavía")
 
-    forecast = _forecast_efectivo()
+    forecast = _aplica_modo(_forecast_efectivo(), modo)
     marine_by_hour = _index_marine_by_hour(_cache.get("oleaje"))
     aemet_by_hour = _index_aemet_by_hour(_cache.get("prediccion_valdes"))
 
@@ -759,14 +781,14 @@ async def api_summary():
 
 
 @app.get("/api/summary-explain")
-async def api_summary_explain():
+async def api_summary_explain(modo: str = "costera"):
     """Explicación detallada del score de los 4 días del resumen,
     basada en las reglas reales de scoring.py (reglas_aplicadas vienen
     directamente de calculate_score, no se duplican aquí)."""
     if not _cache:
         raise HTTPException(503, "Datos no disponibles todavía")
 
-    forecast = _forecast_efectivo()
+    forecast = _aplica_modo(_forecast_efectivo(), modo)
     marine_by_hour = _index_marine_by_hour(_cache.get("oleaje"))
     aemet_by_hour = _index_aemet_by_hour(_cache.get("prediccion_valdes"))
 
@@ -981,7 +1003,7 @@ async def api_refresh():
 
 
 @app.get("/api/extended")
-async def api_extended():
+async def api_extended(modo: str = "costera"):
     """Previsión extendida 16 días con score diario orientativo."""
     if not _cache:
         raise HTTPException(503, "Datos no disponibles todavía")
@@ -991,7 +1013,7 @@ async def api_extended():
         return {"days": [], "updated": _cache.get("timestamp")}
 
     # Indexar forecast horario + marine + AEMET Valdés para reusar en días con datos finos
-    forecast = _forecast_efectivo()
+    forecast = _aplica_modo(_forecast_efectivo(), modo)
     marine_by_hour = _index_marine_by_hour(_cache.get("oleaje"))
     aemet_by_hour = _index_aemet_by_hour(_cache.get("prediccion_valdes"))
 
