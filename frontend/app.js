@@ -1251,7 +1251,7 @@ window.toggleSection = function(id) {
         if (id === 'simulador') {
             const frame = document.getElementById('simuladorFrame');
             if (!frame.src || frame.src === '' || frame.src === window.location.href) {
-                frame.src = 'static/animacion_periodo_3d.html?v=9';
+                frame.src = 'static/animacion_periodo_3d.html?v=10';
             }
         }
         if (id === 'rainradar') {
