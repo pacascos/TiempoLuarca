@@ -88,6 +88,11 @@
     <button onclick="preset(1.2, 8)">Fondo 1.2m &middot; 8s</button>
     <button onclick="preset(2.0, 12)">Fondo largo 2m &middot; 12s</button>
   </div>
+  <div class="ctl" style="min-width:100%">
+    <label>Cargar previsi&oacute;n real (peor hora de luz del d&iacute;a)</label>
+    <div class="presets" id="realBtns"><span style="color:#8895a7;font-size:0.8rem">cargando previsi&oacute;n&hellip;</span></div>
+    <span class="val" id="realInfo" style="font-weight:400;color:#8895a7;font-size:0.8rem"></span>
+  </div>
 </div>
 
 <div id="scene"><div id="slamFlash">&iexcl;PANTOCAZO!</div></div>
@@ -504,6 +509,67 @@ function loop(ms) {
     updateReadouts();
     requestAnimationFrame(loop);
 }
+// ─── Previsión real: cargar la mar de hoy/mañana/... en los sliders ─────────
+let realForecast = null;
+
+async function initReal() {
+    try {
+        const r = await fetch('../api/forecast');
+        if (!r.ok) throw new Error('HTTP ' + r.status);
+        realForecast = (await r.json()).forecast || [];
+        if (!realForecast.length) throw new Error('sin datos');
+        const dates = [...new Set(realForecast.map(f => f.timestamp.slice(0, 10)))].slice(0, 5);
+        const DAYS = ['Dom', 'Lun', 'Mar', 'Mie', 'Jue', 'Vie', 'Sab'];
+        const cont = document.getElementById('realBtns');
+        cont.innerHTML = '<button onclick="cargarReal(\'ahora\')">Ahora</button>' + dates.map((d, i) => {
+            const lbl = i === 0 ? 'Hoy' : i === 1 ? 'Ma&ntilde;ana'
+                : DAYS[new Date(d + 'T12:00:00').getDay()] + ' ' + d.slice(8, 10);
+            return `<button onclick="cargarReal('${d}')">${lbl}</button>`;
+        }).join('');
+    } catch (e) {
+        // sin API (p.ej. abierto como archivo suelto): ocultar la fila
+        document.getElementById('realBtns').parentElement.style.display = 'none';
+    }
+}
+
+window.cargarReal = function(key) {
+    if (!realForecast) return;
+    let hour;
+    if (key === 'ahora') {
+        const n = new Date();
+        const k = n.getFullYear() + '-' + String(n.getMonth() + 1).padStart(2, '0') + '-'
+                + String(n.getDate()).padStart(2, '0') + 'T' + String(n.getHours()).padStart(2, '0');
+        hour = realForecast.find(f => f.timestamp.startsWith(k)) || realForecast[0];
+    } else {
+        const hs = realForecast.filter(f => f.timestamp.startsWith(key))
+            .filter(f => { const h = +f.timestamp.slice(11, 13); return h >= 8 && h <= 20; });
+        if (!hs.length) return;
+        hour = hs.reduce((a, b) => ((b.ola_altura || 0) > (a.ola_altura || 0) ? b : a), hs[0]);
+    }
+    if (!hour) return;
+
+    // componente dominante por altura: el simulador modela un solo tren de olas
+    const sw = hour.swell_altura || 0, ch = hour.viento_ola_altura || 0;
+    let h, t, tipo, otro;
+    if (ch >= sw && hour.viento_ola_periodo) {
+        h = ch; t = hour.viento_ola_periodo; tipo = 'mar de viento';
+        otro = sw ? ` · ademas fondo ${sw.toFixed(1)}m·${(hour.swell_periodo || 0).toFixed(0)}s` : '';
+    } else if (hour.swell_periodo) {
+        h = sw; t = hour.swell_periodo; tipo = 'mar de fondo';
+        otro = ch ? ` · ademas viento ${ch.toFixed(1)}m·${(hour.viento_ola_periodo || 0).toFixed(0)}s` : '';
+    } else {
+        h = hour.ola_altura || 0.5; t = hour.ola_periodo || 6; tipo = 'ola total'; otro = '';
+    }
+    H = Math.min(3, Math.max(0.2, Math.round(h * 10) / 10));
+    T = Math.min(14, Math.max(2, Math.round(t * 2) / 2));
+    document.getElementById('inH').value = H;
+    document.getElementById('inT').value = T;
+    syncLabels();
+    document.getElementById('realInfo').textContent =
+        `Cargado ${hour.timestamp.slice(5, 10)} ${hour.timestamp.slice(11, 16)}: ${tipo} ${h.toFixed(1)}m·${t.toFixed(1)}s (dominante)${otro}`;
+};
+
+initReal();
 syncLabels();
 requestAnimationFrame(loop);
 </script>
