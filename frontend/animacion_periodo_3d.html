@@ -342,7 +342,6 @@ function hullPoints() {
 }
 
 function step(t, dt) {
-    const R = response();
     // Trimado por velocidad: la proa se levanta al acelerar (maximo en la
     // "joroba" pre-planeo, 8-12kn) y se aplana algo al planear; planeando el
     // casco ademas SUBE (sustentacion) y sigue menos la ola (la esquiva).
@@ -350,10 +349,22 @@ function step(t, dt) {
     const plane = Math.min(1, Math.max(0, (VEL - 10) / 6));
     const trim = 0.10 * hump - 0.04 * plane;
     const lift = 0.26 * plane;
-    const follow = 1 - 0.45 * plane;
-    const targetZ = surface(0, 0, t) * R * follow + lift;
-    const targetPitch = Math.atan(slopeX(0, t)) * (0.4 + 0.6 * R) * follow + trim;
-    const k = Math.min(1, dt * 4);
+    const follow = 1 - 0.35 * plane;
+
+    // Flotabilidad: la lancha flota sobre el nivel MEDIO del agua bajo el
+    // casco. Ola larga → el nivel medio ES la ola: sube y la pasa entera.
+    // Chop corto → las crestas se promedian, el barco va llano y las corta
+    // (de ahi los pantocazos). El asiento sigue la pendiente media del casco.
+    const hp = hullPoints();
+    let sum = 0, fore = 0, aft = 0, nF = 0, nA = 0;
+    for (const q of hp) {
+        const sy = surface(q[0], 0, t);
+        sum += sy;
+        if (q[0] >= 0) { fore += sy; nF++; } else { aft += sy; nA++; }
+    }
+    const targetZ = (sum / hp.length) * follow + lift;
+    const targetPitch = Math.atan((fore / nF - aft / nA) / (ESLORA * 0.55)) * follow + trim;
+    const k = Math.min(1, dt * 6);
     boatZ += (targetZ - boatZ) * k;
     boatPitch += (targetPitch - boatPitch) * k;
 
