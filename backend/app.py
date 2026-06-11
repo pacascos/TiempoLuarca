@@ -4,14 +4,17 @@ API REST principal de TiempoLuarca.
 
 import asyncio
 import logging
+import math
 from datetime import datetime, timedelta
 from contextlib import asynccontextmanager
+from zoneinfo import ZoneInfo
 
 from fastapi import FastAPI, HTTPException, Request
 from fastapi.staticfiles import StaticFiles
 from fastapi.responses import HTMLResponse, FileResponse
 from apscheduler.schedulers.asyncio import AsyncIOScheduler
 
+from backend.config import ROOT_PATH
 from backend.data_sources import (
     get_aemet_observacion_busto, get_aemet_prediccion_valdes,
     get_aemet_prediccion_costera, get_aemet_prediccion_playa,
@@ -19,11 +22,22 @@ from backend.data_sources import (
     get_ihm_mareas, get_open_meteo_marine, get_open_meteo_forecast,
     get_open_meteo_extended,
 )
-from backend.scoring import ScoringInput, calculate_score, score_forecast_hour
-from backend.database import init_db, save_snapshot, save_hourly_batch, save_feedback, get_feedback_list, get_history, save_page_view, get_usage_stats
+from backend.scoring import LABELS, WEIGHTS, ScoringInput, calculate_score, score_forecast_hour
+from backend.database import init_db, save_hourly_batch, save_feedback, get_feedback_list, save_page_view, get_usage_stats
 
 logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
+
+# Todos los timestamps de las fuentes (Open-Meteo, AEMET) vienen en hora de
+# Madrid; usar la zona explícita para que el cruce por horas funcione aunque
+# el servidor corra en otra zona horaria (p.ej. UTC en un contenedor).
+TZ_MADRID = ZoneInfo("Europe/Madrid")
+
+DAY_NAMES = ["Lunes", "Martes", "Miercoles", "Jueves", "Viernes", "Sabado", "Domingo"]
+
+
+def now_local() -> datetime:
+    return datetime.now(TZ_MADRID)
 
 
 # ─── Cache por fuente con TTL independiente ───────────────────────────────────
@@ -41,9 +55,9 @@ class SourceCache:
     def is_stale(self) -> bool:
         if self.last_fetch is None:
             return True
-        return datetime.now() - self.last_fetch > self.ttl
+        return now_local() - self.last_fetch > self.ttl
 
-    async def get(self, force: bool = False) -> any:
+    async def get(self, force: bool = False):
         if not force and not self.is_stale() and self.data is not None:
             return self.data
         try:
@@ -51,7 +65,7 @@ class SourceCache:
             result = await self.fetcher()
             if result is not None:
                 self.data = result
-                self.last_fetch = datetime.now()
+                self.last_fetch = now_local()
             else:
                 logger.warning("%s devolvió None, manteniendo cache anterior", self.name)
             return self.data
@@ -78,6 +92,66 @@ _cache: dict = {}
 _cache_time: datetime | None = None
 
 
+def _index_marine_by_hour(marine: list | None) -> dict:
+    """Indexa datos marinos por hora ('YYYY-MM-DDTHH')."""
+    return {m.get("timestamp", "")[:13]: m for m in marine or []}
+
+
+def _index_aemet_by_hour(aemet_valdes: list | None) -> dict:
+    """Indexa la predicción horaria de AEMET Valdés por 'YYYY-MM-DDTHH'."""
+    by_hour = {}
+    for av in aemet_valdes or []:
+        if av.get("fecha") and av.get("hora") is not None:
+            by_hour[f"{av['fecha']}T{int(av['hora']):02d}"] = av
+    return by_hour
+
+
+def _con_lluvia_aemet(f: dict, aemet_h: dict | None) -> dict:
+    """Devuelve la hora de forecast con la prob. de lluvia de AEMET si existe."""
+    if aemet_h and aemet_h.get("prob_precipitacion") is not None:
+        return {**f, "prob_precipitacion": aemet_h["prob_precipitacion"]}
+    return f
+
+
+# AEMET da la dirección del viento como texto; el resto de la app usa grados
+_DIR_DEGREES = {
+    "N": 0, "NNE": 22.5, "NE": 45, "ENE": 67.5, "E": 90, "ESE": 112.5,
+    "SE": 135, "SSE": 157.5, "S": 180, "SSO": 202.5, "SO": 225, "OSO": 247.5,
+    "O": 270, "ONO": 292.5, "NO": 315, "NNO": 337.5,
+}
+
+
+def _forecast_efectivo() -> list:
+    """Forecast horario de Open-Meteo; si no está disponible (caída de la API),
+    fallback con la predicción horaria de AEMET Valdés (48h) para que el score
+    y el resumen sigan funcionando."""
+    forecast = _cache.get("forecast")
+    if forecast:
+        return forecast
+
+    fallback = []
+    for av in _cache.get("prediccion_valdes") or []:
+        if not av.get("fecha") or av.get("hora") is None:
+            continue
+        fallback.append({
+            "timestamp": f"{av['fecha']}T{int(av['hora']):02d}:00",
+            "temperatura": av.get("temperatura"),
+            "humedad": av.get("humedad"),
+            "prob_precipitacion": av.get("prob_precipitacion"),
+            "precipitacion": None,
+            "viento_nudos": av.get("viento_vel_nudos"),
+            "viento_dir": _DIR_DEGREES.get(av.get("viento_dir")),
+            "viento_racha_nudos": av.get("racha_max_nudos"),
+            "visibilidad": None,
+            "presion": None,
+            "nubosidad": None,
+            "fuente": "AEMET Valdés (fallback)",
+        })
+    if fallback:
+        logger.warning("Forecast Open-Meteo no disponible: usando fallback AEMET Valdés (%d horas)", len(fallback))
+    return fallback
+
+
 async def _refresh_cache(force: bool = False):
     """Refresca solo las fuentes cuyo TTL ha expirado (o todas si force=True)."""
     global _cache, _cache_time
@@ -100,15 +174,14 @@ async def _refresh_cache(force: bool = False):
 
     # Construir cache combinado con los datos más recientes de cada fuente
     _cache = {key: src.data for key, src in _sources.items()}
-    _cache["timestamp"] = datetime.now().isoformat()
-    _cache_time = datetime.now()
+    _cache["timestamp"] = now_local().isoformat()
+    _cache_time = now_local()
 
     # Guardar histórico horario: las horas ya pasadas del forecast + marine combinadas
     try:
         forecast_data = _cache.get("forecast") or []
-        marine_data = _cache.get("oleaje") or []
-        marine_by_h = {m.get("timestamp", "")[:13]: m for m in marine_data}
-        now_str = datetime.now().strftime("%Y-%m-%dT%H")
+        marine_by_h = _index_marine_by_hour(_cache.get("oleaje"))
+        now_str = now_local().strftime("%Y-%m-%dT%H")
 
         # Solo guardar horas pasadas o la actual (no futuras, esas son predicción)
         entries_to_save = []
@@ -173,12 +246,8 @@ def _compute_day_score_from_hourly(
     scores = []
     for f in daylight:
         ts = f.get("timestamp", "")[:13]
-        m = marine_by_hour.get(ts)
-        aemet_h = aemet_by_hour.get(ts)
-        f_scoring = f
-        if aemet_h and aemet_h.get("prob_precipitacion") is not None:
-            f_scoring = {**f, "prob_precipitacion": aemet_h["prob_precipitacion"]}
-        scored = score_forecast_hour(f_scoring, m)
+        f_scoring = _con_lluvia_aemet(f, aemet_by_hour.get(ts))
+        scored = score_forecast_hour(f_scoring, marine_by_hour.get(ts))
         scores.append(scored["score"])
 
     avg_raw = sum(scores) / len(scores)
@@ -257,48 +326,6 @@ COMP_LABEL = {
 }
 
 
-def _compute_current_score(data: dict) -> int | None:
-    obs = data.get("observacion_busto")
-    forecast = data.get("forecast") or []
-    marine = data.get("oleaje") or []
-    now_str = datetime.now().strftime("%Y-%m-%dT%H:")
-
-    current_marine = None
-    for m in marine:
-        if m.get("timestamp", "").startswith(now_str):
-            current_marine = m
-            break
-
-    current_fc = None
-    for f in forecast:
-        if f.get("timestamp", "").startswith(now_str):
-            current_fc = f
-            break
-
-    # Usar AEMET si hay, sino Open-Meteo
-    if obs:
-        viento = obs.get("viento_vel_nudos")
-        racha = obs.get("viento_racha_nudos")
-        vis = (obs.get("visibilidad") or 0) * 1000 if obs.get("visibilidad") else None
-    elif current_fc:
-        viento = current_fc.get("viento_nudos")
-        racha = current_fc.get("viento_racha_nudos")
-        vis = current_fc.get("visibilidad")
-    else:
-        return None
-
-    inp = ScoringInput(
-        viento_nudos=viento,
-        racha_nudos=racha,
-        ola_altura=current_marine.get("ola_altura") if current_marine else None,
-        ola_periodo=current_marine.get("ola_periodo") if current_marine else None,
-        prob_precipitacion=current_fc.get("prob_precipitacion") if current_fc else None,
-        visibilidad_m=vis,
-    )
-    result = calculate_score(inp)
-    return result.score
-
-
 scheduler = AsyncIOScheduler()
 
 
@@ -313,8 +340,6 @@ async def lifespan(app: FastAPI):
     scheduler.shutdown()
 
 
-from backend.config import ROOT_PATH
-
 app = FastAPI(title="TiempoLuarca", version="1.0.0", lifespan=lifespan, root_path=ROOT_PATH)
 app.mount("/static", StaticFiles(directory="frontend"), name="static")
 
@@ -323,8 +348,13 @@ app.mount("/static", StaticFiles(directory="frontend"), name="static")
 
 @app.get("/", response_class=HTMLResponse)
 async def index(request: Request):
-    ip = request.client.host if request.client else "unknown"
-    save_page_view(ip)
+    # Detrás de un reverse proxy la IP real viene en X-Forwarded-For
+    fwd = request.headers.get("x-forwarded-for", "")
+    ip = fwd.split(",")[0].strip() if fwd else (request.client.host if request.client else "unknown")
+    try:
+        save_page_view(ip)
+    except Exception as e:
+        logger.error("Error guardando page view: %s", e)
     return FileResponse("frontend/index.html")
 
 
@@ -353,61 +383,32 @@ async def api_current():
 
     obs = _cache.get("observacion_busto")
     marine = _cache.get("oleaje") or []
-    forecast = _cache.get("forecast") or []
+    forecast = _forecast_efectivo()
 
     # Encontrar datos marinos y forecast más cercanos a ahora
-    now = datetime.now()
-    now_str = now.strftime("%Y-%m-%dT%H:")
+    now = now_local()
+    now_key = now.strftime("%Y-%m-%dT%H")
 
-    current_marine = None
-    for m in marine:
-        if m.get("timestamp", "").startswith(now_str):
-            current_marine = m
-            break
+    marine_by_hour = _index_marine_by_hour(marine)
+    forecast_by_hour = {f.get("timestamp", "")[:13]: f for f in forecast}
+    aemet_by_hour_cur = _index_aemet_by_hour(_cache.get("prediccion_valdes"))
 
-    current_forecast = None
-    for f in forecast:
-        if f.get("timestamp", "").startswith(now_str):
-            current_forecast = f
-            break
+    current_marine = marine_by_hour.get(now_key)
+    current_forecast = forecast_by_hour.get(now_key)
 
     # Lluvia: priorizar AEMET Valdés sobre Open-Meteo
-    aemet_valdes = _cache.get("prediccion_valdes") or []
-    aemet_by_hour_cur = {}
-    for av in aemet_valdes:
-        if av.get("fecha") and av.get("hora") is not None:
-            key = f"{av['fecha']}T{int(av['hora']):02d}"
-            aemet_by_hour_cur[key] = av
-
-    now_key = now.strftime("%Y-%m-%dT%H")
     aemet_now = aemet_by_hour_cur.get(now_key)
-    if aemet_now and current_forecast and aemet_now.get("prob_precipitacion") is not None:
-        current_forecast = {**current_forecast, "prob_precipitacion": aemet_now["prob_precipitacion"]}
+    if current_forecast:
+        current_forecast = _con_lluvia_aemet(current_forecast, aemet_now)
 
     # ─── Score principal: hora actual + próximas 4h (ventana de 5h) ──────────
-    # Indexar forecast y marine por hora
-    marine_by_hour = {}
-    for m in marine:
-        marine_by_hour[m.get("timestamp", "")[:13]] = m
-
-    # Obtener scores de las próximas 5 horas
     hour_scores = []
-    now_dt = datetime.now()
     for i in range(5):
-        h_dt = now_dt + timedelta(hours=i)
-        h_str = h_dt.strftime("%Y-%m-%dT%H")
-        fc_h = None
-        for f in forecast:
-            if f.get("timestamp", "").startswith(h_str):
-                fc_h = f
-                break
-        m_h = marine_by_hour.get(h_str)
+        h_str = (now + timedelta(hours=i)).strftime("%Y-%m-%dT%H")
+        fc_h = forecast_by_hour.get(h_str)
         if fc_h:
-            # Inyectar lluvia AEMET si hay
-            aemet_h = aemet_by_hour_cur.get(h_str)
-            if aemet_h and aemet_h.get("prob_precipitacion") is not None:
-                fc_h = {**fc_h, "prob_precipitacion": aemet_h["prob_precipitacion"]}
-            scored = score_forecast_hour(fc_h, m_h)
+            fc_h = _con_lluvia_aemet(fc_h, aemet_by_hour_cur.get(h_str))
+            scored = score_forecast_hour(fc_h, marine_by_hour.get(h_str))
             hour_scores.append(scored["score"])
 
     # Para la hora actual, preferir datos de AEMET si hay
@@ -417,7 +418,8 @@ async def api_current():
         if obs:
             viento = obs.get("viento_vel_nudos")
             racha = obs.get("viento_racha_nudos")
-            vis = (obs.get("visibilidad") or 0) * 1000 if obs.get("visibilidad") else None
+            # AEMET da visibilidad en km; 0 es válido (niebla cerrada)
+            vis = obs["visibilidad"] * 1000 if obs.get("visibilidad") is not None else None
         else:
             viento = current_forecast.get("viento_nudos") if current_forecast else None
             racha = current_forecast.get("viento_racha_nudos") if current_forecast else None
@@ -440,14 +442,10 @@ async def api_current():
         result_now = calculate_score(inp)
 
         # Score principal = peor de: (actual, media próximas 5h)
-        # Si las próximas horas empeoran, el score baja
+        # Así si ahora es 9 pero en 2h será 4, el principal no da 9
         avg_5h = round(sum(hour_scores) / len(hour_scores))
         worst_5h = min(hour_scores)
-        # El score principal es el mínimo entre el actual y la media de 5h
-        # Así si ahora es 9 pero en 2h será 4, el principal no da 9
         main_score = min(result_now.score, avg_5h)
-
-        from backend.scoring import LABELS
         label, color, recomendacion = LABELS[main_score]
 
         # Tendencia: comparar primeras 2h con últimas 2h
@@ -500,26 +498,19 @@ async def api_current():
             "viento_racha": None,
             "viento_racha_nudos": current_forecast.get("viento_racha_nudos"),
             "precipitacion": current_forecast.get("precipitacion"),
-            "visibilidad": (current_forecast.get("visibilidad") or 0) / 1000 if current_forecast.get("visibilidad") else None,
+            "visibilidad": current_forecast["visibilidad"] / 1000 if current_forecast.get("visibilidad") is not None else None,
             "fuente": "Open-Meteo (fallback)",
         }
 
     # Tendencia de presión: comparar ahora con hace 6h y con +6h
     presion_trend = None
-    if current_forecast and forecast:
+    if current_forecast:
         presion_ahora = current_forecast.get("presion")
-        # Buscar presión hace 6h
         h_6ago = (now - timedelta(hours=6)).strftime("%Y-%m-%dT%H")
         h_6fut = (now + timedelta(hours=6)).strftime("%Y-%m-%dT%H")
-        presion_6h_ago = None
-        presion_6h_fut = None
-        for f in forecast:
-            ts = f.get("timestamp", "")[:13]
-            if ts == h_6ago:
-                presion_6h_ago = f.get("presion")
-            if ts == h_6fut:
-                presion_6h_fut = f.get("presion")
-        if presion_ahora and presion_6h_ago:
+        presion_6h_ago = forecast_by_hour.get(h_6ago, {}).get("presion")
+        presion_6h_fut = forecast_by_hour.get(h_6fut, {}).get("presion")
+        if presion_ahora is not None and presion_6h_ago is not None:
             diff = round(presion_ahora - presion_6h_ago, 1)
             if diff <= -4:
                 trend_label = "Bajando rapido"
@@ -563,22 +554,11 @@ async def api_forecast():
     if not _cache:
         raise HTTPException(503, "Datos no disponibles todavía")
 
-    forecast = _cache.get("forecast") or []
-    marine = _cache.get("oleaje") or []
+    forecast = _forecast_efectivo()
 
-    # Indexar AEMET Valdés por fecha+hora para lluvia (más fiable que Open-Meteo)
-    aemet_by_hour = {}
-    aemet_valdes = _cache.get("prediccion_valdes") or []
-    for av in aemet_valdes:
-        if av.get("fecha") and av.get("hora") is not None:
-            key = f"{av['fecha']}T{int(av['hora']):02d}"
-            aemet_by_hour[key] = av
-
-    # Indexar datos marinos por hora
-    marine_by_hour = {}
-    for m in marine:
-        ts = m.get("timestamp", "")[:13]
-        marine_by_hour[ts] = m
+    # Lluvia de AEMET Valdés (más fiable que Open-Meteo) + datos marinos por hora
+    aemet_by_hour = _index_aemet_by_hour(_cache.get("prediccion_valdes"))
+    marine_by_hour = _index_marine_by_hour(_cache.get("oleaje"))
 
     # Indexar presion por hora para calcular tendencia 6h
     presion_by_hour = {}
@@ -620,6 +600,7 @@ async def api_forecast():
             "viento_nudos": f.get("viento_nudos"),
             "viento_dir": f.get("viento_dir"),
             "viento_racha_nudos": f.get("viento_racha_nudos"),
+            "fuente_viento": f.get("fuente_viento"),
             "prob_precipitacion": prob_precip,
             "precipitacion": f.get("precipitacion"),
             "cielo": cielo_aemet,
@@ -654,21 +635,11 @@ async def api_summary():
     if not _cache:
         raise HTTPException(503, "Datos no disponibles todavía")
 
-    forecast = _cache.get("forecast") or []
-    marine = _cache.get("oleaje") or []
-    marine_by_hour = {}
-    for m in marine:
-        ts = m.get("timestamp", "")[:13]
-        marine_by_hour[ts] = m
+    forecast = _forecast_efectivo()
+    marine_by_hour = _index_marine_by_hour(_cache.get("oleaje"))
+    aemet_by_hour = _index_aemet_by_hour(_cache.get("prediccion_valdes"))
 
-    # Indexar AEMET Valdés por fecha+hora para lluvia (más fiable localmente)
-    aemet_by_hour = {}
-    for av in _cache.get("prediccion_valdes") or []:
-        if av.get("fecha") and av.get("hora") is not None:
-            aemet_by_hour[f"{av['fecha']}T{int(av['hora']):02d}"] = av
-
-    now = datetime.now()
-    DAY_NAMES = ["Lunes", "Martes", "Miercoles", "Jueves", "Viernes", "Sabado", "Domingo"]
+    now = now_local()
 
     # Generar los próximos 4 días (hoy + 3)
     days = []
@@ -683,7 +654,6 @@ async def api_summary():
             label = DAY_NAMES[d.weekday()]
         days.append({"key": f"day{i}", "label": label, "date": date_str})
 
-    import math
     def _circular_mean(angles_deg):
         """Media circular de ángulos en grados (para dirección de viento)."""
         sin_sum = sum(math.sin(math.radians(a)) for a in angles_deg)
@@ -739,7 +709,6 @@ async def api_summary():
         best_score = max(scores) if scores else None
         worst_score = min(scores) if scores else None
 
-        from backend.scoring import LABELS
         label, color, recomendacion = LABELS.get(avg_score, ("?", "#999", ""))
 
         # Encontrar mejor ventana (3h consecutivas con mayor score promedio)
@@ -797,18 +766,11 @@ async def api_summary_explain():
     if not _cache:
         raise HTTPException(503, "Datos no disponibles todavía")
 
-    forecast = _cache.get("forecast") or []
-    marine = _cache.get("oleaje") or []
-    marine_by_hour = {m.get("timestamp", "")[:13]: m for m in marine}
-    aemet_by_hour = {}
-    for av in _cache.get("prediccion_valdes") or []:
-        if av.get("fecha") and av.get("hora") is not None:
-            aemet_by_hour[f"{av['fecha']}T{int(av['hora']):02d}"] = av
+    forecast = _forecast_efectivo()
+    marine_by_hour = _index_marine_by_hour(_cache.get("oleaje"))
+    aemet_by_hour = _index_aemet_by_hour(_cache.get("prediccion_valdes"))
 
-    now = datetime.now()
-    DAY_NAMES = ["Lunes", "Martes", "Miercoles", "Jueves", "Viernes", "Sabado", "Domingo"]
-
-    from backend.scoring import LABELS, WEIGHTS
+    now = now_local()
 
     def explain_day(date_str: str, day_label: str) -> dict:
         day_hours = [f for f in forecast if f.get("timestamp", "").startswith(date_str)]
@@ -822,10 +784,7 @@ async def api_summary_explain():
         for f in daylight:
             ts = f.get("timestamp", "")[:13]
             m = marine_by_hour.get(ts)
-            aemet_h = aemet_by_hour.get(ts)
-            f_scoring = f
-            if aemet_h and aemet_h.get("prob_precipitacion") is not None:
-                f_scoring = {**f, "prob_precipitacion": aemet_h["prob_precipitacion"]}
+            f_scoring = _con_lluvia_aemet(f, aemet_by_hour.get(ts))
             scored = score_forecast_hour(f_scoring, m)
             horas.append({
                 "hora": f["timestamp"][11:16],
@@ -953,12 +912,40 @@ async def api_summary_explain():
 @app.post("/api/feedback")
 async def api_feedback(request: Request):
     """Guardar feedback del usuario."""
-    body = await request.json()
-    required = ["date", "score_real"]
-    for field in required:
+    try:
+        body = await request.json()
+    except Exception:
+        raise HTTPException(400, "JSON inválido")
+    if not isinstance(body, dict):
+        raise HTTPException(400, "JSON inválido")
+
+    for field in ("date", "score_real"):
         if field not in body:
             raise HTTPException(400, f"Campo requerido: {field}")
-    save_feedback(body)
+
+    try:
+        datetime.strptime(str(body["date"]), "%Y-%m-%d")
+    except ValueError:
+        raise HTTPException(400, "Fecha inválida (formato YYYY-MM-DD)")
+
+    try:
+        score_real = int(body["score_real"])
+    except (TypeError, ValueError):
+        raise HTTPException(400, "score_real debe ser un entero")
+    if not 1 <= score_real <= 10:
+        raise HTTPException(400, "score_real debe estar entre 1 y 10")
+
+    comentario = body.get("comentario")
+    save_feedback({
+        "date": str(body["date"]),
+        "salida": 1 if body.get("salida") in (1, "1", True) else 0,
+        "score_app": body.get("score_app"),
+        "score_real": score_real,
+        "viento_real": body.get("viento_real"),
+        "oleaje_real": body.get("oleaje_real"),
+        "lluvia_real": body.get("lluvia_real"),
+        "comentario": str(comentario)[:500] if comentario else None,
+    })
     return {"ok": True}
 
 
@@ -968,16 +955,27 @@ async def api_feedback_list():
     return {"feedback": get_feedback_list()}
 
 
-@app.get("/api/history")
-async def api_history_list():
-    return {"history": get_history()}
-
-
 # ─── Refresh manual ──────────────────────────────────────────────────────────
+
+# Cooldown del refresh forzado: martillear las APIs gratuitas (Open-Meteo)
+# activa su protección anti-abuso y bloquea la IP a nivel TLS.
+_last_force_refresh: datetime | None = None
+FORCE_REFRESH_COOLDOWN = timedelta(minutes=10)
+
 
 @app.post("/api/refresh")
 async def api_refresh():
-    """Forzar actualización de todas las fuentes."""
+    """Forzar actualización de todas las fuentes (max 1 vez cada 10 min)."""
+    global _last_force_refresh
+    now = now_local()
+    if _last_force_refresh and now - _last_force_refresh < FORCE_REFRESH_COOLDOWN:
+        restante = FORCE_REFRESH_COOLDOWN - (now - _last_force_refresh)
+        return {
+            "ok": False,
+            "detail": f"Refresh forzado hace poco; espera {int(restante.total_seconds())}s",
+            "timestamp": _cache.get("timestamp"),
+        }
+    _last_force_refresh = now
     await _refresh_cache(force=True)
     return {"ok": True, "timestamp": _cache.get("timestamp")}
 
@@ -993,19 +991,13 @@ async def api_extended():
         return {"days": [], "updated": _cache.get("timestamp")}
 
     # Indexar forecast horario + marine + AEMET Valdés para reusar en días con datos finos
-    forecast = _cache.get("forecast") or []
-    marine = _cache.get("oleaje") or []
-    marine_by_hour = {m.get("timestamp", "")[:13]: m for m in marine}
-    aemet_by_hour = {}
-    for av in _cache.get("prediccion_valdes") or []:
-        if av.get("fecha") and av.get("hora") is not None:
-            aemet_by_hour[f"{av['fecha']}T{int(av['hora']):02d}"] = av
+    forecast = _forecast_efectivo()
+    marine_by_hour = _index_marine_by_hour(_cache.get("oleaje"))
+    aemet_by_hour = _index_aemet_by_hour(_cache.get("prediccion_valdes"))
 
     forecast_dates = {f.get("timestamp", "")[:10] for f in forecast}
 
-    from backend.scoring import LABELS
-
-    DAY_NAMES = ["Lun", "Mar", "Mie", "Jue", "Vie", "Sab", "Dom"]
+    day_names_short = ["Lun", "Mar", "Mie", "Jue", "Vie", "Sab", "Dom"]
 
     result = []
     for i, d in enumerate(extended):
@@ -1023,6 +1015,11 @@ async def api_extended():
             label_v, color_v, _rec = LABELS[score_val]
         else:
             # Fallback: score orientativo desde valores diarios máximos
+            temp_max, temp_min = d.get("temp_max"), d.get("temp_min")
+            if temp_max is not None and temp_min is not None:
+                temp_media = (temp_max + temp_min) / 2
+            else:
+                temp_media = temp_max if temp_max is not None else temp_min
             inp = ScoringInput(
                 viento_nudos=d.get("viento_max_kn"),
                 racha_nudos=d.get("racha_max_kn"),
@@ -1033,16 +1030,15 @@ async def api_extended():
                 prob_precipitacion=d.get("prob_precipitacion"),
                 precipitacion_mm=d.get("precipitacion_mm"),
                 nubosidad=d.get("nubosidad"),
-                temperatura=(d.get("temp_max", 15) + d.get("temp_min", 10)) / 2 if d.get("temp_max") else None,
+                temperatura=temp_media,
             )
             scored = calculate_score(inp)
             score_val = scored.score
             label_v = scored.label
             color_v = scored.color
         try:
-            from datetime import datetime as dt
-            day_dt = dt.strptime(fecha, "%Y-%m-%d")
-            day_name = DAY_NAMES[day_dt.weekday()]
+            day_dt = datetime.strptime(fecha, "%Y-%m-%d")
+            day_name = day_names_short[day_dt.weekday()]
         except Exception:
             day_name = ""
 
@@ -1072,7 +1068,7 @@ async def api_extended():
 @app.get("/api/cache-status")
 async def api_cache_status():
     """Estado del cache de cada fuente."""
-    now = datetime.now()
+    now = now_local()
     status = {}
     for key, src in _sources.items():
         age = (now - src.last_fetch).total_seconds() if src.last_fetch else None

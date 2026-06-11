@@ -5,9 +5,15 @@ Clientes para las fuentes de datos meteorológicos y marítimos.
 - Open-Meteo: oleaje y predicción meteorológica
 """
 
-import httpx
+import io
+import json
 import logging
-from datetime import datetime, timedelta
+import tarfile
+import xml.etree.ElementTree as ET
+from datetime import datetime, timedelta, timezone
+from zoneinfo import ZoneInfo
+
+import httpx
 from backend.config import (
     AEMET_API_KEY, AEMET_BASE_URL, AEMET_STATION_BUSTO,
     AEMET_MUNICIPIO_VALDES, AEMET_COSTA_CAN1, AEMET_PLAYA_LUARCA,
@@ -19,16 +25,15 @@ from backend.config import (
 logger = logging.getLogger(__name__)
 
 
+TZ_MADRID = ZoneInfo("Europe/Madrid")
+
+
 def _utc_to_local(hora_str: str, fecha_str: str) -> tuple[str, str]:
     """Convierte hora UTC (HH:MM) + fecha (YYYY-MM-DD) a hora local de España.
     Devuelve (hora_local, fecha_local) porque al sumar puede cambiar de día."""
     try:
-        hh, mm = map(int, hora_str.split(":"))
-        # Calcular offset UTC de Europe/Madrid para esa fecha
-        from datetime import timezone
         dt_utc = datetime.strptime(f"{fecha_str} {hora_str}", "%Y-%m-%d %H:%M").replace(tzinfo=timezone.utc)
-        # Usar el offset local del sistema (asumiendo servidor en España)
-        dt_local = dt_utc.astimezone()
+        dt_local = dt_utc.astimezone(TZ_MADRID)
         return dt_local.strftime("%H:%M"), dt_local.strftime("%Y-%m-%d")
     except Exception:
         return hora_str, fecha_str
@@ -39,6 +44,9 @@ TIMEOUT = 15.0
 
 async def _aemet_get(path: str) -> dict | list | None:
     """AEMET usa un sistema de dos pasos: primero da una URL con los datos."""
+    if not AEMET_API_KEY:
+        logger.warning("AEMET_API_KEY no configurada, omitiendo %s", path)
+        return None
     try:
         async with httpx.AsyncClient(timeout=TIMEOUT) as client:
             r = await client.get(f"{AEMET_BASE_URL}{path}", headers=AEMET_HEADERS)
@@ -53,9 +61,7 @@ async def _aemet_get(path: str) -> dict | list | None:
             try:
                 return r2.json()
             except Exception:
-                text = r2.content.decode("latin-1")
-                import json
-                return json.loads(text)
+                return json.loads(r2.content.decode("latin-1"))
     except Exception as e:
         logger.error("Error AEMET %s: %s", path, e)
         return None
@@ -82,10 +88,10 @@ def _parse_observacion(obs: dict) -> dict:
         "humedad": obs.get("hr"),             # %
         "presion": obs.get("pres"),           # hPa
         "viento_vel": obs.get("vv"),          # m/s
-        "viento_vel_nudos": round(obs.get("vv", 0) * 1.94384, 1) if obs.get("vv") else None,
+        "viento_vel_nudos": round(obs["vv"] * 1.94384, 1) if obs.get("vv") is not None else None,
         "viento_dir": obs.get("dv"),          # grados
         "viento_racha": obs.get("vmax"),      # m/s
-        "viento_racha_nudos": round(obs.get("vmax", 0) * 1.94384, 1) if obs.get("vmax") else None,
+        "viento_racha_nudos": round(obs["vmax"] * 1.94384, 1) if obs.get("vmax") is not None else None,
         "precipitacion": obs.get("prec"),     # mm
         "visibilidad": obs.get("vis"),        # km
         "fuente": "AEMET Cabo Busto",
@@ -202,13 +208,20 @@ async def get_aemet_prediccion_playa() -> list | None:
         v = obj.get(key)
         return v if isinstance(v, dict) else {}
 
+    def _fecha_iso(v) -> str:
+        """AEMET playa devuelve la fecha como int YYYYMMDD; otras como ISO."""
+        s = str(v or "")
+        if len(s) == 8 and s.isdigit():
+            return f"{s[:4]}-{s[4:6]}-{s[6:8]}"
+        return s[:10]
+
     result = []
     for entry in data:
         pred = entry.get("prediccion", {})
         dia_data = pred.get("dia", [])
         for dia in dia_data:
             result.append({
-                "fecha": dia.get("fecha", "")[:10],
+                "fecha": _fecha_iso(dia.get("fecha")),
                 "estado_cielo": _safe_get(dia, "estadoCielo").get("descripcion1", ""),
                 "viento": _safe_get(dia, "viento").get("descripcion1", ""),
                 "oleaje": _safe_get(dia, "oleaje").get("descripcion1", ""),
@@ -227,7 +240,7 @@ async def get_ihm_mareas(days: int = 3) -> dict | None:
     IHM API: sin fecha da hoy, con fecha dd-mm-yyyy.
     Respuesta: {"mareas": {"datos": {"marea": [{"hora","altura","tipo"},...]}}}
     """
-    today = datetime.now()
+    today = datetime.now(TZ_MADRID)
     results = {}
 
     # IHM: Navia=9, Cudillero no está. Avilés=7 es la más cercana al este.
@@ -248,7 +261,6 @@ async def get_ihm_mareas(days: int = 3) -> dict | None:
                     r.raise_for_status()
 
                     # IHM devuelve latin-1
-                    import json
                     text = r.content.decode("latin-1")
                     if "No existen datos" in text:
                         # Sin fecha específica, prueba sin ella (solo funciona para hoy)
@@ -297,10 +309,9 @@ async def get_aemet_alertas_costeras() -> list | None:
     AEMET devuelve CAP XML en tar.gz. Parseamos los avisos relevantes.
     Zonas costeras Asturias: 633301C (occidental), 633302C (oriental).
     """
-    import tarfile
-    import io
-    import xml.etree.ElementTree as ET
-
+    if not AEMET_API_KEY:
+        logger.warning("AEMET_API_KEY no configurada, omitiendo alertas")
+        return []
     try:
         async with httpx.AsyncClient(timeout=TIMEOUT) as client:
             # Paso 1: obtener URL de datos
@@ -463,8 +474,44 @@ async def get_open_meteo_marine() -> list | None:
 
 # ─── Open-Meteo: Pronóstico meteorológico ────────────────────────────────────
 
+async def _get_arome_wind(client: httpx.AsyncClient) -> dict:
+    """Viento del modelo AROME HD de Météo-France (1.5km, cubre Luarca, ~48h).
+    Mucho mejor que el blend global (~10km) para viento costero con cabos.
+    Devuelve {timestamp: {viento_nudos, viento_dir, viento_racha_nudos}}."""
+    arome_by_hour = {}
+    try:
+        r = await client.get(OPEN_METEO_FORECAST_URL, params={
+            "latitude": LUARCA_LAT,
+            "longitude": LUARCA_LON,
+            "hourly": "wind_speed_10m,wind_direction_10m,wind_gusts_10m",
+            "timezone": "Europe/Madrid",
+            "forecast_days": 3,
+            "wind_speed_unit": "kn",
+            "models": "meteofrance_arome_france_hd",
+        })
+        r.raise_for_status()
+        hourly = r.json().get("hourly", {})
+        for i, t in enumerate(hourly.get("time", [])):
+            v = hourly.get("wind_speed_10m", [None])[i]
+            if v is None:
+                continue  # más allá del horizonte AROME
+            arome_by_hour[t] = {
+                "viento_nudos": v,
+                "viento_dir": hourly.get("wind_direction_10m", [None])[i],
+                "viento_racha_nudos": hourly.get("wind_gusts_10m", [None])[i],
+            }
+    except Exception as e:
+        logger.warning("AROME no disponible, usando solo best_match: %s", e)
+    if arome_by_hour:
+        logger.info("AROME 1.5km: viento de alta resolución para %d horas", len(arome_by_hour))
+    else:
+        logger.warning("AROME devolvió 0 horas, viento solo de best_match")
+    return arome_by_hour
+
+
 async def get_open_meteo_forecast() -> list | None:
-    """Pronóstico meteorológico horario desde Open-Meteo."""
+    """Pronóstico meteorológico horario desde Open-Meteo.
+    El viento de las primeras ~48h se sustituye por AROME HD (1.5km) si responde."""
     params = {
         "latitude": LUARCA_LAT,
         "longitude": LUARCA_LON,
@@ -478,12 +525,13 @@ async def get_open_meteo_forecast() -> list | None:
             r = await client.get(OPEN_METEO_FORECAST_URL, params=params)
             r.raise_for_status()
             data = r.json()
+            arome_by_hour = await _get_arome_wind(client)
 
         hourly = data.get("hourly", {})
         times = hourly.get("time", [])
         result = []
         for i, t in enumerate(times):
-            result.append({
+            entry = {
                 "timestamp": t,
                 "temperatura": hourly.get("temperature_2m", [None])[i],
                 "humedad": hourly.get("relative_humidity_2m", [None])[i],
@@ -496,7 +544,16 @@ async def get_open_meteo_forecast() -> list | None:
                 "presion": hourly.get("pressure_msl", [None])[i],
                 "nubosidad": hourly.get("cloud_cover", [None])[i],
                 "fuente": "Open-Meteo",
-            })
+            }
+            ar = arome_by_hour.get(t)
+            if ar:
+                entry["viento_nudos"] = ar["viento_nudos"]
+                if ar["viento_dir"] is not None:
+                    entry["viento_dir"] = ar["viento_dir"]
+                if ar["viento_racha_nudos"] is not None:
+                    entry["viento_racha_nudos"] = ar["viento_racha_nudos"]
+                entry["fuente_viento"] = "AROME 1.5km"
+            result.append(entry)
         return result
     except Exception as e:
         logger.error("Error Open-Meteo Forecast: %s", e)
@@ -553,38 +610,3 @@ async def get_open_meteo_extended() -> list | None:
     except Exception as e:
         logger.error("Error Open-Meteo Extended: %s", e)
         return None
-
-
-# ─── Agregador principal ─────────────────────────────────────────────────────
-
-async def fetch_all_data() -> dict:
-    """Obtiene datos de todas las fuentes en paralelo."""
-    import asyncio
-
-    results = await asyncio.gather(
-        get_aemet_observacion_busto(),
-        get_aemet_prediccion_valdes(),
-        get_aemet_prediccion_costera(),
-        get_aemet_prediccion_playa(),
-        get_ihm_mareas(days=8),
-        get_open_meteo_marine(),
-        get_open_meteo_forecast(),
-        return_exceptions=True,
-    )
-
-    def safe(r):
-        if isinstance(r, Exception):
-            logger.error("Error en fetch: %s", r)
-            return None
-        return r
-
-    return {
-        "observacion_busto": safe(results[0]),
-        "prediccion_valdes": safe(results[1]),
-        "prediccion_costera": safe(results[2]),
-        "prediccion_playa": safe(results[3]),
-        "mareas": safe(results[4]),
-        "oleaje": safe(results[5]),
-        "forecast": safe(results[6]),
-        "timestamp": datetime.now().isoformat(),
-    }
