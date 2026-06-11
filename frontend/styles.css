@@ -491,6 +491,14 @@ h2 {
 .chart-legend-item { display: flex; align-items: center; gap: 0.3rem; }
 .chart-legend-dot { width: 12px; height: 3px; border-radius: 1px; }
 .chart-model-note { font-style: italic; opacity: 0.8; }
+.chart-info {
+    margin-top: 0.4rem;
+    font-size: 0.75rem;
+    color: var(--text-dim);
+    text-align: center;
+    line-height: 1.5;
+}
+.chart-info b { color: var(--text); font-weight: 600; }
 
 /* ─── Summary Cards ───────────────────────────────────────────────────────── */
 .summary-cards {

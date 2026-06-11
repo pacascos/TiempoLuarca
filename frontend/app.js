@@ -1677,6 +1677,8 @@ function drawDetailChart(type) {
     if (hours48.length === 0) return;
 
     const canvas = document.getElementById('detailChart');
+    // Oleaje usa dos sub-graficas apiladas: necesita mas alto
+    canvas.style.height = type === 'oleaje' ? '340px' : '';
     const ctx = canvas.getContext('2d');
 
     const dpr = window.devicePixelRatio || 1;
@@ -1688,6 +1690,14 @@ function drawDetailChart(type) {
     const H = rect.height;
 
     ctx.clearRect(0, 0, W, H);
+
+    const chartInfo = document.getElementById('chartInfo');
+    if (chartInfo) chartInfo.innerHTML = '';
+
+    if (type === 'oleaje') {
+        drawOleajeChart(hours48, ctx, W, H);
+        return;
+    }
 
     const hasSecondary = config.series.some(s => s.secondary);
     const pad = { top: 20, right: hasSecondary ? 40 : 12, bottom: 32, left: 45 };
@@ -1940,6 +1950,230 @@ function drawDetailChart(type) {
     ).join('')
     + (obsDrawn ? '<div class="chart-legend-item"><div class="chart-legend-dot" style="background:#fff;width:8px;height:8px;border-radius:50%"></div><span>Observado ahora (Cabo Busto)</span></div>' : '')
     + (modelNote ? `<div class="chart-legend-item chart-model-note"><span>${modelNote}</span></div>` : '');
+}
+
+// ─── Gráfica de oleaje: altura + potencia arriba, periodo con bandas abajo ───
+
+// Bandas de periodo: qué significa cada rango para un barco pequeño
+const PERIOD_BANDS = [
+    { max: 4,  color: 'rgba(244, 67, 54, 0.12)',  label: 'picada' },
+    { max: 7,  color: 'rgba(255, 171, 0, 0.10)',  label: 'moderada' },
+    { max: 11, color: 'rgba(100, 221, 23, 0.08)', label: 'tendida' },
+    { max: 99, color: 'rgba(6, 182, 212, 0.08)',  label: 'larga' },
+];
+
+function periodoDesc(t) {
+    if (t == null) return '';
+    for (const b of PERIOD_BANDS) if (t < b.max) return b.label;
+    return 'larga';
+}
+
+// Potencia de ola en aguas profundas: P ≈ 0.49 · H² · T (kW por metro de frente)
+function olaPotencia(h) {
+    if (h.ola_altura == null || h.ola_periodo == null) return null;
+    return 0.49 * h.ola_altura * h.ola_altura * h.ola_periodo;
+}
+
+function drawOleajeChart(hours48, ctx, W, H) {
+    const pad = { top: 18, right: 64, bottom: 30, left: 45 };
+    const gap = 30;
+    const plotW = W - pad.left - pad.right;
+    const totalPlotH = H - pad.top - pad.bottom - gap;
+    const hTop = Math.round(totalPlotH * 0.58);
+    const hBot = totalPlotH - hTop;
+    const topY = pad.top;
+    const botY = pad.top + hTop + gap;
+    const n = hours48.length;
+    const xFor = i => pad.left + (i / (n - 1)) * plotW;
+
+    const swellH = hours48.map(h => h.swell_altura);
+    const chopH = hours48.map(h => h.viento_ola_altura);
+    const totalH = hours48.map(h => h.ola_altura);
+    const swellT = hours48.map(h => h.swell_periodo);
+    const chopT = hours48.map(h => h.viento_ola_periodo);
+    const potencia = hours48.map(olaPotencia);
+
+    const notNull = a => a.filter(v => v != null);
+    const maxH = Math.max(0.5, ...notNull(swellH.concat(chopH, totalH))) * 1.15;
+    const maxP = Math.max(2, ...notNull(potencia)) * 1.15;
+    const maxT = Math.max(12, ...notNull(swellT.concat(chopT))) * 1.1;
+
+    const yTop = v => topY + hTop - (v / maxH) * hTop;
+    const yPow = v => topY + hTop - (v / maxP) * hTop;
+    const yBot = v => botY + hBot - (v / maxT) * hBot;
+
+    // ─── Fondos: bandas alternas por dia en ambas sub-graficas ────
+    let prevDate = '';
+    let dayIdx = 0;
+    for (let i = 0; i < n; i++) {
+        const dateStr = hours48[i].timestamp.slice(0, 10);
+        if (dateStr === prevDate) continue;
+        let endIdx = n - 1;
+        for (let j = i + 1; j < n; j++) {
+            if (hours48[j].timestamp.slice(0, 10) !== dateStr) { endIdx = j - 1; break; }
+        }
+        const x0 = xFor(i), x1 = xFor(endIdx);
+        if (dayIdx % 2 === 1) {
+            ctx.fillStyle = 'rgba(255,255,255,0.03)';
+            ctx.fillRect(x0, topY, x1 - x0, hTop);
+            ctx.fillRect(x0, botY, x1 - x0, hBot);
+        }
+        if (i > 0) {
+            ctx.strokeStyle = '#ffffff18';
+            ctx.lineWidth = 1;
+            ctx.beginPath(); ctx.moveTo(x0, topY); ctx.lineTo(x0, topY + hTop); ctx.stroke();
+            ctx.beginPath(); ctx.moveTo(x0, botY); ctx.lineTo(x0, botY + hBot); ctx.stroke();
+        }
+        const d = new Date(dateStr + 'T12:00:00');
+        ctx.fillStyle = '#ffffff30';
+        ctx.font = '10px -apple-system, sans-serif';
+        ctx.textAlign = 'left';
+        ctx.fillText(DAY_SHORT[d.getDay()] + ' ' + d.getDate(), x0 + 4, topY + 11);
+        prevDate = dateStr;
+        dayIdx++;
+    }
+
+    // ─── Sub-grafica superior: alturas + area de potencia ────
+    ctx.strokeStyle = '#1e3050';
+    ctx.lineWidth = 0.5;
+    for (let i = 0; i <= 3; i++) {
+        const v = maxH - (maxH / 3) * i;
+        const y = yTop(v);
+        ctx.beginPath(); ctx.moveTo(pad.left, y); ctx.lineTo(pad.left + plotW, y); ctx.stroke();
+        ctx.fillStyle = '#8895a7';
+        ctx.font = '10px -apple-system, sans-serif';
+        ctx.textAlign = 'right';
+        ctx.fillText((Math.round(v * 10) / 10) + 'm', pad.left - 6, y + 4);
+    }
+    // Eje derecho: potencia
+    ctx.fillStyle = '#8895a780';
+    ctx.textAlign = 'left';
+    for (let i = 0; i <= 3; i++) {
+        const v = maxP - (maxP / 3) * i;
+        ctx.fillText(Math.round(v) + (i === 0 ? ' kW/m' : ''), pad.left + plotW + 5, yPow(v) + 4);
+    }
+
+    // Area de potencia (energia del mar — lo que de verdad pega)
+    ctx.fillStyle = 'rgba(255,255,255,0.08)';
+    ctx.beginPath();
+    let started = false, lastX = pad.left;
+    potencia.forEach((v, i) => {
+        if (v == null) return;
+        const x = xFor(i), y = yPow(v);
+        started ? ctx.lineTo(x, y) : ctx.moveTo(x, y);
+        started = true; lastX = x;
+    });
+    if (started) {
+        ctx.lineTo(lastX, topY + hTop);
+        ctx.lineTo(pad.left, topY + hTop);
+        ctx.closePath();
+        ctx.fill();
+    }
+
+    function line(vals, yFn, color, dashed) {
+        ctx.strokeStyle = color;
+        ctx.lineWidth = 2;
+        ctx.setLineDash(dashed ? [6, 3] : []);
+        ctx.beginPath();
+        let st = false;
+        vals.forEach((v, i) => {
+            if (v == null) return;
+            const x = xFor(i), y = yFn(v);
+            st ? ctx.lineTo(x, y) : ctx.moveTo(x, y);
+            st = true;
+        });
+        ctx.stroke();
+        ctx.setLineDash([]);
+    }
+
+    line(totalH, yTop, '#8b5cf6', true);
+    line(swellH, yTop, '#06b6d4', false);
+    line(chopH, yTop, '#f97316', false);
+
+    // ─── Sub-grafica inferior: periodos sobre bandas de consecuencia ────
+    let prevT = 0;
+    for (const b of PERIOD_BANDS) {
+        if (prevT >= maxT) break;
+        const hi = Math.min(b.max, maxT);
+        ctx.fillStyle = b.color;
+        ctx.fillRect(pad.left, yBot(hi), plotW, yBot(prevT) - yBot(hi));
+        ctx.fillStyle = '#8895a7';
+        ctx.font = '9px -apple-system, sans-serif';
+        ctx.textAlign = 'left';
+        ctx.fillText(b.label, pad.left + plotW + 5, (yBot(hi) + yBot(prevT)) / 2 + 3);
+        prevT = b.max;
+    }
+    ctx.fillStyle = '#8895a7';
+    ctx.font = '10px -apple-system, sans-serif';
+    ctx.textAlign = 'right';
+    for (const v of [0, 4, 7, 11]) {
+        if (v > maxT) continue;
+        ctx.fillText(v + 's', pad.left - 6, yBot(v) + 4);
+    }
+    ctx.fillStyle = '#ffffff40';
+    ctx.font = '9px -apple-system, sans-serif';
+    ctx.textAlign = 'left';
+    ctx.fillText('PERIODO', pad.left + 4, botY + 10);
+
+    line(swellT, yBot, '#06b6d4', false);
+    line(chopT, yBot, '#f97316', false);
+
+    // ─── Eje X (horas) y linea de ahora, en ambas sub-graficas ────
+    ctx.fillStyle = '#8895a7';
+    ctx.font = '10px -apple-system, sans-serif';
+    ctx.textAlign = 'center';
+    const step = Math.max(1, Math.floor(n / 12));
+    for (let i = 0; i < n; i += step) {
+        ctx.fillText(hours48[i].timestamp.slice(11, 16), xFor(i), H - pad.bottom + 14);
+    }
+    const now = new Date();
+    const nowIdx = hours48.findIndex(f => new Date(f.timestamp) >= now);
+    if (nowIdx > 0) {
+        const xNow = xFor(nowIdx);
+        ctx.strokeStyle = '#ffffff30';
+        ctx.lineWidth = 1;
+        ctx.setLineDash([4, 4]);
+        ctx.beginPath(); ctx.moveTo(xNow, topY); ctx.lineTo(xNow, topY + hTop); ctx.stroke();
+        ctx.beginPath(); ctx.moveTo(xNow, botY); ctx.lineTo(xNow, botY + hBot); ctx.stroke();
+        ctx.setLineDash([]);
+        ctx.fillStyle = '#ffffff60';
+        ctx.font = '10px -apple-system, sans-serif';
+        ctx.fillText('ahora', xNow, topY - 5);
+    }
+
+    // ─── Leyenda e interpretacion ────
+    document.getElementById('chartLegend').innerHTML = `
+        <div class="chart-legend-item"><div class="chart-legend-dot" style="background:#06b6d4"></div><span>Mar de fondo</span></div>
+        <div class="chart-legend-item"><div class="chart-legend-dot" style="background:#f97316"></div><span>Mar de viento</span></div>
+        <div class="chart-legend-item"><div class="chart-legend-dot" style="background:transparent;border-top:2px dashed #8b5cf6;height:0"></div><span>Ola total</span></div>
+        <div class="chart-legend-item"><div class="chart-legend-dot" style="background:rgba(255,255,255,0.25);width:12px;height:8px"></div><span>Potencia (kW/m)</span></div>`;
+
+    const cur = hours48[Math.max(nowIdx, 0)] || hours48[0];
+    const chartInfo = document.getElementById('chartInfo');
+    if (chartInfo && cur) {
+        const p = olaPotencia(cur);
+        const parts = [];
+        if (cur.swell_altura != null) {
+            parts.push(`fondo <b>${cur.swell_altura.toFixed(1)}m</b>·${cur.swell_periodo ? cur.swell_periodo.toFixed(0) + 's (' + periodoDesc(cur.swell_periodo) + ')' : ''}`);
+        }
+        if (cur.viento_ola_altura != null) {
+            parts.push(`viento <b>${cur.viento_ola_altura.toFixed(1)}m</b>·${cur.viento_ola_periodo ? cur.viento_ola_periodo.toFixed(0) + 's (' + periodoDesc(cur.viento_ola_periodo) + ')' : ''}`);
+        }
+        if (p != null) parts.push(`potencia ≈ <b>${p < 10 ? p.toFixed(1) : Math.round(p)} kW/m</b>`);
+        const avisos = [];
+        if ((cur.viento_ola_altura ?? 0) >= 0.4 && (cur.viento_ola_periodo ?? 9) < 4) {
+            avisos.push('Mar de viento corta y abrupta: pantocazos, reduce velocidad.');
+        }
+        if ((cur.swell_altura ?? 0) >= 1.2 && (cur.swell_periodo ?? 0) >= 10) {
+            avisos.push('Fondo largo con energía: rompe fuerte en bajos, cabos y bocana con bajamar.');
+        }
+        if (p != null && p >= 15) {
+            avisos.push('Mar con mucha energía (≥15 kW/m): deja margen extra con la costa.');
+        }
+        if ((cur.ola_altura ?? 0) < 0.5 && !avisos.length) avisos.push('Mar tranquila.');
+        chartInfo.innerHTML = 'Ahora: ' + parts.join(' · ')
+            + (avisos.length ? '<br>' + avisos.join(' ') : '');
+    }
 }
 
 window.addEventListener('resize', () => {
