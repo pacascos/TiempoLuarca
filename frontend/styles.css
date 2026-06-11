@@ -490,6 +490,7 @@ h2 {
 }
 .chart-legend-item { display: flex; align-items: center; gap: 0.3rem; }
 .chart-legend-dot { width: 12px; height: 3px; border-radius: 1px; }
+.chart-model-note { font-style: italic; opacity: 0.8; }
 
 /* ─── Summary Cards ───────────────────────────────────────────────────────── */
 .summary-cards {

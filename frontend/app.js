@@ -1766,6 +1766,37 @@ function drawDetailChart(type) {
         ctx.fillText(t.slice(11, 16), x, H - pad.bottom + 14);
     }
 
+    // Modelo de viento usado: AROME 1.5km las primeras ~48h, modelo global despues
+    let modelNote = '';
+    if (type === 'viento') {
+        const lastArome = hours48.map(h => h.fuente_viento === 'AROME 1.5km').lastIndexOf(true);
+        if (lastArome === -1) {
+            modelNote = 'Modelo: Open-Meteo global (~10km)';
+        } else if (lastArome === hours48.length - 1) {
+            modelNote = 'Modelo: AROME 1.5km (Meteo-France)';
+        } else {
+            const t = hours48[lastArome].timestamp;
+            const d = new Date(t);
+            modelNote = `Modelo: AROME 1.5km hasta ${DAY_SHORT[d.getDay()]} ${t.slice(11, 16)} · despues Open-Meteo global`;
+            // Divisoria vertical donde cambia el modelo
+            const xB = pad.left + ((lastArome + 0.5) / (hours48.length - 1)) * plotW;
+            ctx.strokeStyle = '#8b5cf660';
+            ctx.lineWidth = 1;
+            ctx.setLineDash([3, 3]);
+            ctx.beginPath();
+            ctx.moveTo(xB, pad.top);
+            ctx.lineTo(xB, pad.top + plotH);
+            ctx.stroke();
+            ctx.setLineDash([]);
+            ctx.fillStyle = '#8b5cf690';
+            ctx.font = '9px -apple-system, sans-serif';
+            ctx.textAlign = 'right';
+            ctx.fillText('AROME 1.5km', xB - 5, pad.top + plotH - 6);
+            ctx.textAlign = 'left';
+            ctx.fillText('global', xB + 5, pad.top + plotH - 6);
+        }
+    }
+
     // "Ahora" line
     const nowIdx = hours48.findIndex(f => new Date(f.timestamp) >= now);
     if (nowIdx > 0) {
@@ -1854,7 +1885,7 @@ function drawDetailChart(type) {
             <div class="chart-legend-dot" style="background:${s.color};${s.dashed ? 'background:transparent;border-top:2px dashed ' + s.color + ';height:0' : ''}"></div>
             <span>${s.label}${s.secondary ? ' (eje secundario)' : ''}</span>
         </div>`
-    ).join('');
+    ).join('') + (modelNote ? `<div class="chart-legend-item chart-model-note"><span>${modelNote}</span></div>` : '');
 }
 
 window.addEventListener('resize', () => {
