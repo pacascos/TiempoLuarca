@@ -1877,6 +1877,41 @@ function drawDetailChart(type) {
 
     for (const s of primarySeries) drawLine(s, pRange);
 
+    // Observación real de Cabo Busto sobre la curva del modelo, para contrastar.
+    // Solo en modo costera: en altura la curva es del punto de mar abierto.
+    let obsDrawn = false;
+    const obs = currentData?.observacion;
+    if (type === 'viento' && modoNav === 'costera' && obs?.timestamp
+        && obs.fuente?.includes('Busto') && obs.viento_vel_nudos != null && hours48.length > 1) {
+        const obsT = new Date(obs.timestamp);
+        const t0 = new Date(hours48[0].timestamp);
+        const tN = new Date(hours48[hours48.length - 1].timestamp);
+        if (obsT >= t0 && obsT <= tN) {
+            const x = pad.left + ((obsT - t0) / (tN - t0)) * plotW;
+            const yFor = v => {
+                const yRaw = pad.top + plotH - ((v - pRange.min) / (pRange.max - pRange.min)) * plotH;
+                return Math.max(pad.top, Math.min(pad.top + plotH, yRaw));
+            };
+            const drawObsPoint = (valKn, color) => {
+                if (valKn == null) return;
+                ctx.beginPath();
+                ctx.arc(x, yFor(knToDisplay(valKn)), 5, 0, Math.PI * 2);
+                ctx.fillStyle = color;
+                ctx.fill();
+                ctx.strokeStyle = '#fff';
+                ctx.lineWidth = 1.5;
+                ctx.stroke();
+            };
+            drawObsPoint(obs.viento_vel_nudos, '#3b82f6');
+            drawObsPoint(obs.viento_racha_nudos, '#f97316');
+            ctx.fillStyle = '#ffffff90';
+            ctx.font = '9px -apple-system, sans-serif';
+            ctx.textAlign = 'center';
+            ctx.fillText('Busto', x, yFor(knToDisplay(obs.viento_vel_nudos)) + 16);
+            obsDrawn = true;
+        }
+    }
+
     if (secondarySeries.length > 0) {
         const sRange = getRange(secondarySeries);
         for (const s of secondarySeries) {
@@ -1902,7 +1937,9 @@ function drawDetailChart(type) {
             <div class="chart-legend-dot" style="background:${s.color};${s.dashed ? 'background:transparent;border-top:2px dashed ' + s.color + ';height:0' : ''}"></div>
             <span>${s.label}${s.secondary ? ' (eje secundario)' : ''}</span>
         </div>`
-    ).join('') + (modelNote ? `<div class="chart-legend-item chart-model-note"><span>${modelNote}</span></div>` : '');
+    ).join('')
+    + (obsDrawn ? '<div class="chart-legend-item"><div class="chart-legend-dot" style="background:#fff;width:8px;height:8px;border-radius:50%"></div><span>Observado ahora (Cabo Busto)</span></div>' : '')
+    + (modelNote ? `<div class="chart-legend-item chart-model-note"><span>${modelNote}</span></div>` : '');
 }
 
 window.addEventListener('resize', () => {
