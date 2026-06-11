@@ -35,6 +35,15 @@
     border-radius: 6px; padding: 6px 10px; font-size: 0.78rem; cursor: pointer;
   }
   .presets button:hover { background: #234; border-color: #3b82f6; }
+  .presets button.sel { background: #3b82f6; border-color: #3b82f6; color: #fff; font-weight: 600; }
+  #realBtns button { font-size: 0.88rem; padding: 8px 14px; }
+  #sceneTag {
+    position: absolute; top: 14px; left: 16px;
+    background: rgba(10, 22, 40, 0.78); border: 1px solid #2a4060;
+    border-radius: 8px; padding: 6px 12px; font-size: 0.85rem; color: #cfd8e3;
+    pointer-events: none;
+  }
+  #sceneTag b { color: #fff; }
   .readouts {
     display: grid; grid-template-columns: repeat(auto-fit, minmax(140px, 1fr));
     gap: 10px; margin-top: 12px;
@@ -55,6 +64,11 @@
 <p class="sub">Todo a escala real. Cambia altura, periodo, eslora, velocidad y rumbo — y arrastra para girar la cámara.</p>
 
 <div class="controls">
+  <div class="ctl" style="min-width:100%">
+    <label>Previsi&oacute;n real &mdash; elige el d&iacute;a (peor hora de luz)</label>
+    <div class="presets" id="realBtns"><span style="color:#8895a7;font-size:0.8rem">cargando previsi&oacute;n&hellip;</span></div>
+    <span class="val" id="realInfo" style="font-weight:400;color:#8895a7;font-size:0.8rem"></span>
+  </div>
   <div class="ctl">
     <label>Altura de ola (H)</label>
     <input type="range" id="inH" min="0.2" max="3" step="0.1" value="1.0">
@@ -88,14 +102,9 @@
     <button onclick="preset(1.2, 8)">Fondo 1.2m &middot; 8s</button>
     <button onclick="preset(2.0, 12)">Fondo largo 2m &middot; 12s</button>
   </div>
-  <div class="ctl" style="min-width:100%">
-    <label>Cargar previsi&oacute;n real (peor hora de luz del d&iacute;a)</label>
-    <div class="presets" id="realBtns"><span style="color:#8895a7;font-size:0.8rem">cargando previsi&oacute;n&hellip;</span></div>
-    <span class="val" id="realInfo" style="font-weight:400;color:#8895a7;font-size:0.8rem"></span>
-  </div>
 </div>
 
-<div id="scene"><div id="slamFlash">&iexcl;PANTOCAZO!</div></div>
+<div id="scene"><div id="sceneTag"></div><div id="slamFlash">&iexcl;PANTOCAZO!</div></div>
 
 <div class="readouts">
   <div class="ro"><div class="k">Longitud de ola</div><div class="v" id="roL">--</div></div>
@@ -535,9 +544,10 @@ window.preset = (h, t) => {
     document.getElementById('inH').value = h;
     document.getElementById('inT').value = t;
     syncLabels();
+    marcaManual();
 };
-document.getElementById('inH').addEventListener('input', e => { H = parseFloat(e.target.value); syncLabels(); });
-document.getElementById('inT').addEventListener('input', e => { T = parseFloat(e.target.value); syncLabels(); });
+document.getElementById('inH').addEventListener('input', e => { H = parseFloat(e.target.value); syncLabels(); marcaManual(); });
+document.getElementById('inT').addEventListener('input', e => { T = parseFloat(e.target.value); syncLabels(); marcaManual(); });
 document.getElementById('inE').addEventListener('input', e => { ESLORA = parseFloat(e.target.value); syncLabels(); });
 document.getElementById('inV').addEventListener('input', e => { VEL = parseInt(e.target.value, 10); syncLabels(); });
 
@@ -592,11 +602,12 @@ async function initReal() {
         const dates = [...new Set(realForecast.map(f => f.timestamp.slice(0, 10)))].slice(0, 5);
         const DAYS = ['Dom', 'Lun', 'Mar', 'Mie', 'Jue', 'Vie', 'Sab'];
         const cont = document.getElementById('realBtns');
-        cont.innerHTML = '<button onclick="cargarReal(\'ahora\')">Ahora</button>' + dates.map((d, i) => {
+        cont.innerHTML = '<button data-key="ahora" onclick="cargarReal(\'ahora\')">Ahora</button>' + dates.map((d, i) => {
             const lbl = i === 0 ? 'Hoy' : i === 1 ? 'Ma&ntilde;ana'
                 : DAYS[new Date(d + 'T12:00:00').getDay()] + ' ' + d.slice(8, 10);
-            return `<button onclick="cargarReal('${d}')">${lbl}</button>`;
+            return `<button data-key="${d}" onclick="cargarReal('${d}')">${lbl}</button>`;
         }).join('');
+        cargarReal('ahora');   // por defecto: la mar de ahora mismo
     } catch (e) {
         // sin API (p.ej. abierto como archivo suelto): ocultar la fila
         document.getElementById('realBtns').parentElement.style.display = 'none';
@@ -638,7 +649,24 @@ window.cargarReal = function(key) {
     syncLabels();
     document.getElementById('realInfo').textContent =
         `Cargado ${hour.timestamp.slice(5, 10)} ${hour.timestamp.slice(11, 16)}: ${tipo} ${h.toFixed(1)}m·${t.toFixed(1)}s (dominante)${otro}`;
+    // resaltar el boton activo y mostrarlo dentro de la animacion
+    let lblSel = '';
+    document.querySelectorAll('#realBtns button').forEach(b => {
+        const on = b.dataset.key === String(key);
+        b.classList.toggle('sel', on);
+        if (on) lblSel = b.textContent;
+    });
+    document.getElementById('sceneTag').innerHTML =
+        `<b>${lblSel}</b> ${hour.timestamp.slice(11, 16)} &middot; ${tipo} ${h.toFixed(1)}m&middot;${t.toFixed(1)}s`;
 };
+
+function marcaManual() {
+    document.querySelectorAll('#realBtns button').forEach(b => b.classList.remove('sel'));
+    const tag = document.getElementById('sceneTag');
+    if (tag) tag.innerHTML = `<b>Manual</b> &middot; ${H.toFixed(1)}m&middot;${T}s`;
+    const info = document.getElementById('realInfo');
+    if (info) info.textContent = '';
+}
 
 initReal();
 syncLabels();
