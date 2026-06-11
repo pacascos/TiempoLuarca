@@ -68,7 +68,32 @@
       "Bash(xargs cat:*)",
       "Bash(grep -r \"TODO\\\\|FIXME\\\\|BUG\\\\|HACK\" /Users/cascos/code/TiempoLuarca --include=*.py --include=*.js)",
       "Bash(grep -n \"except\" /Users/cascos/code/TiempoLuarca/backend/*.py)",
-      "WebFetch(domain:lainakai.com)"
+      "WebFetch(domain:lainakai.com)",
+      "Bash(grep -r \"github\\\\|deploy\\\\|host\\\\|heroku\\\\|vercel\\\\|netlify\" /Users/cascos/code/TiempoLuarca/*.md)",
+      "Bash(python3:*)",
+      "Bash(/Users/cascos/code/TiempoLuarca/.venv/bin/python:*)",
+      "Bash(.venv/bin/python:*)",
+      "Bash(PORT=8765 ./.venv/bin/python *)",
+      "Bash(./.venv/bin/python -c ' *)",
+      "Bash(pkill -f \"run.py\")",
+      "WebFetch(domain:embed.ventusky.com)",
+      "WebFetch(domain:www.rainviewer.com)",
+      "WebFetch(domain:my.ventusky.com)",
+      "Bash(node --check /Users/cascos/code/TiempoLuarca/frontend/app.js)",
+      "Bash(ps -p 13832 -o pid,command=)",
+      "Bash(ps -p 32670 -o pid,command=)",
+      "Bash(PORT=8765 HOST=127.0.0.1 python3 *)",
+      "Bash(PORT=8765 HOST=127.0.0.1 /Users/cascos/code/TiempoLuarca/.venv/bin/python *)",
+      "Bash(claude update *)",
+      "Bash(git -C /Users/cascos/code/TiempoLuarca diff --stat)",
+      "Bash(echo \"exit: $?\")",
+      "Bash(node --check frontend/app.js)",
+      "Bash(pkill -f \"uvicorn backend.app:app --port 812\")",
+      "Bash(pkill -f \"until curl -s -X POST http://localhost:8124\")",
+      "Bash(dig +short api.open-meteo.com)",
+      "Bash(pkill -f \"until curl -s http://localhost:8000/api/cache-status\")",
+      "Bash(pkill -f \"uvicorn backend.app:app --port 8000\")",
+      "Bash(.venv/bin/uvicorn backend.app:app --port 8000)"
     ]
   }
 }

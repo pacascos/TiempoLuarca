@@ -17,6 +17,14 @@ function localNowMins() {
     return d.getHours() * 60 + d.getMinutes();
 }
 
+// Escapar texto externo (feedback de usuarios, textos de AEMET) antes de meterlo en innerHTML
+function escapeHtml(s) {
+    if (s == null) return '';
+    return String(s).replace(/[&<>"']/g, c => ({
+        '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;'
+    }[c]));
+}
+
 const SCORE_COLORS = {
     10: '#00C853', 9: '#64DD17', 8: '#AEEA00', 7: '#FFD600', 6: '#FFAB00',
     5: '#FF6D00', 4: '#FF3D00', 3: '#E53935', 2: '#F44336', 1: '#EF5350'
@@ -147,16 +155,7 @@ function renderCurrent(data) {
     const fcNowPre = data.forecast_now;
     const emojiEl = document.getElementById('weatherEmoji');
     if (emojiEl && fcNowPre) {
-        const nub = fcNowPre.nubosidad ?? 50;
-        const lluvia = fcNowPre.prob_precipitacion ?? 0;
-        let emoji;
-        if (lluvia >= 70) emoji = '🌧️';       // lluvia fuerte
-        else if (lluvia >= 40) emoji = '🌦️';   // lluvia y claros
-        else if (nub >= 80) emoji = '☁️';       // cubierto
-        else if (nub >= 50) emoji = '⛅';       // nubes y sol
-        else if (nub >= 20) emoji = '🌤️';      // poco nublado
-        else emoji = '☀️';                      // despejado
-        emojiEl.textContent = emoji;
+        emojiEl.textContent = skyEmoji(fcNowPre.nubosidad, fcNowPre.prob_precipitacion);
     }
 
     // Observation data
@@ -333,9 +332,9 @@ function renderAlerts(alertas) {
         return `<div class="alert-banner ${nivel}">
             <div class="alert-icon"><i class="wi ${levelIcons[nivel] || 'wi-storm-warning'}"></i></div>
             <div class="alert-content">
-                <div class="alert-level">${levelLabels[nivel] || 'Aviso'} - ${a.zona || 'Costa asturiana'}</div>
-                <div class="alert-headline">${a.headline || a.fenomeno || 'Aviso costero activo'}</div>
-                ${a.descripcion ? `<div class="alert-detail">${a.descripcion}</div>` : ''}
+                <div class="alert-level">${levelLabels[nivel] || 'Aviso'} - ${escapeHtml(a.zona || 'Costa asturiana')}</div>
+                <div class="alert-headline">${escapeHtml(a.headline || a.fenomeno || 'Aviso costero activo')}</div>
+                ${a.descripcion ? `<div class="alert-detail">${escapeHtml(a.descripcion)}</div>` : ''}
                 ${a.inicio ? `<div class="alert-detail">Desde: ${a.inicio.replace('T',' ').slice(0,16)} ${a.fin ? '· Hasta: ' + a.fin.replace('T',' ').slice(0,16) : ''}</div>` : ''}
             </div>
         </div>`;
@@ -721,15 +720,7 @@ function renderExtended(days) {
         const dayNum = d.fecha.slice(8, 10);
 
         // Emoji cielo
-        const nub = d.nubosidad ?? 50;
-        const lluvia = d.prob_precipitacion ?? 0;
-        let emoji;
-        if (lluvia >= 70) emoji = '🌧️';
-        else if (lluvia >= 40) emoji = '🌦️';
-        else if (nub >= 80) emoji = '☁️';
-        else if (nub >= 50) emoji = '⛅';
-        else if (nub >= 20) emoji = '🌤️';
-        else emoji = '☀️';
+        const emoji = skyEmoji(d.nubosidad, d.prob_precipitacion);
 
         html += `<div class="ext-cell${conf}${todayCls}" onclick="toggleExtDetail('${d.fecha}')" style="border-top: 3px solid ${color}">
             <div class="ext-cell-date">${dayNum}</div>
@@ -1240,6 +1231,11 @@ window.toggleSection = function(id) {
                 frame.src = 'https://rtsp.me/embed/Ti49NGnd/';
             }
         }
+        if (id === 'rainradar') {
+            initRainRadar();
+        }
+    } else {
+        if (id === 'rainradar') pauseRainRadar();
     }
 };
 
@@ -1288,6 +1284,162 @@ window.selectPortus = function(mapId) {
     const frame = document.getElementById('portusFrame');
     const newSrc = `${PORTUS_BASE}?resourceId=${config.resourceId}&var=${config.var}&zoom=8&lat=43.54&lon=-6.54&vec=${config.vec}&locale=es&theme=dark`;
     if (frame.src !== newSrc) frame.src = newSrc;
+};
+
+// ─── Radar de lluvia (RainViewer) ────────────────────────────────────────────
+// API pública: últimas ~2h de radar observado + ~30min nowcast.
+// Docs: https://www.rainviewer.com/api.html
+
+const RAINVIEWER_API = 'https://api.rainviewer.com/public/weather-maps.json';
+const RAIN_RADAR_LUARCA = [43.54, -6.54];
+// Encuadre inicial: ~50 nm alrededor de Luarca (1 nm ≈ 0.0166° lat; 1.15° lon a 43.5°N)
+const RAIN_RADAR_BOUNDS = [[42.70, -7.70], [44.38, -5.38]];
+const RAIN_RADAR_MAX_NATIVE_ZOOM = 7;   // Límite de la API pública: por encima devuelve "Zoom Level Not Supported"
+
+let rainRadarMap = null;
+let rainRadarLayer = null;
+let rainRadarFrames = [];
+let rainRadarPastCount = 0;
+let rainRadarHost = '';
+let rainRadarIdx = 0;
+let rainRadarTimer = null;
+let rainRadarInitStarted = false;
+
+function loadLeaflet() {
+    if (window.L) return Promise.resolve();
+    return new Promise((resolve, reject) => {
+        if (!document.querySelector('link[data-leaflet]')) {
+            const css = document.createElement('link');
+            css.rel = 'stylesheet';
+            css.href = 'https://unpkg.com/leaflet@1.9.4/dist/leaflet.css';
+            css.setAttribute('data-leaflet', '1');
+            document.head.appendChild(css);
+        }
+        const js = document.createElement('script');
+        js.src = 'https://unpkg.com/leaflet@1.9.4/dist/leaflet.js';
+        js.onload = () => resolve();
+        js.onerror = reject;
+        document.head.appendChild(js);
+    });
+}
+
+async function initRainRadar() {
+    if (rainRadarInitStarted) {
+        if (rainRadarMap) setTimeout(() => rainRadarMap.invalidateSize(), 50);
+        return;
+    }
+    rainRadarInitStarted = true;
+
+    try {
+        await loadLeaflet();
+    } catch (e) {
+        console.error('No se pudo cargar Leaflet:', e);
+        rainRadarInitStarted = false;
+        return;
+    }
+
+    rainRadarMap = L.map('rainRadarMap', {
+        minZoom: 4,
+        maxZoom: 11,
+        zoomControl: true,
+    });
+    rainRadarMap.fitBounds(RAIN_RADAR_BOUNDS);
+
+    L.tileLayer('https://{s}.basemaps.cartocdn.com/dark_all/{z}/{x}/{y}{r}.png', {
+        attribution: '&copy; OpenStreetMap &copy; CARTO',
+        subdomains: 'abcd',
+        maxZoom: 19,
+    }).addTo(rainRadarMap);
+
+    L.circleMarker(RAIN_RADAR_LUARCA, {
+        radius: 6, color: '#06b6d4', fillColor: '#06b6d4', fillOpacity: 0.9, weight: 2,
+    }).addTo(rainRadarMap).bindTooltip('Luarca', { permanent: false });
+
+    setTimeout(() => rainRadarMap.invalidateSize(), 50);
+
+    try {
+        const data = await fetch(RAINVIEWER_API).then(r => r.json());
+        rainRadarHost = data.host;
+        const past = (data.radar && data.radar.past) || [];
+        const nowcast = (data.radar && data.radar.nowcast) || [];
+        rainRadarPastCount = past.length;
+        rainRadarFrames = past.concat(nowcast);
+        if (!rainRadarFrames.length) {
+            document.getElementById('radarTime').textContent = 'sin datos';
+            return;
+        }
+        const slider = document.getElementById('radarSlider');
+        slider.max = rainRadarFrames.length - 1;
+        rainRadarIdx = Math.max(0, rainRadarPastCount - 1);
+        showRainRadarFrame(rainRadarIdx);
+        startRainRadar();
+    } catch (e) {
+        console.error('RainViewer API error:', e);
+        document.getElementById('radarTime').textContent = 'error';
+    }
+}
+
+function showRainRadarFrame(idx) {
+    if (!rainRadarFrames.length) return;
+    const frame = rainRadarFrames[idx];
+    if (!frame) return;
+    // Tile: {host}{path}/{size}/{z}/{x}/{y}/{color}/{smooth}_{snow}.png
+    // color 2 = Universal Blue; 1_1 = smooth + snow layer
+    const url = `${rainRadarHost}${frame.path}/256/{z}/{x}/{y}/2/1_1.png`;
+    const newLayer = L.tileLayer(url, {
+        opacity: 0.75,
+        zIndex: 10,
+        tileSize: 256,
+        maxNativeZoom: RAIN_RADAR_MAX_NATIVE_ZOOM,
+    });
+    newLayer.addTo(rainRadarMap);
+    // Swap layers sin flicker: añadir nueva, luego quitar la vieja
+    if (rainRadarLayer) {
+        const old = rainRadarLayer;
+        setTimeout(() => rainRadarMap.removeLayer(old), 120);
+    }
+    rainRadarLayer = newLayer;
+
+    const d = new Date(frame.time * 1000);
+    const hh = String(d.getHours()).padStart(2, '0');
+    const mm = String(d.getMinutes()).padStart(2, '0');
+    document.getElementById('radarTime').textContent = `${hh}:${mm}`;
+
+    const kindEl = document.getElementById('radarKind');
+    const isForecast = idx >= rainRadarPastCount;
+    kindEl.textContent = isForecast ? 'Nowcast' : 'Observado';
+    kindEl.classList.toggle('forecast', isForecast);
+
+    document.getElementById('radarSlider').value = idx;
+}
+
+function startRainRadar() {
+    if (rainRadarTimer) return;
+    const btn = document.getElementById('radarPlayBtn');
+    rainRadarTimer = setInterval(() => {
+        rainRadarIdx = (rainRadarIdx + 1) % rainRadarFrames.length;
+        showRainRadarFrame(rainRadarIdx);
+    }, 650);
+    if (btn) btn.innerHTML = '&#10074;&#10074;';
+}
+
+function pauseRainRadar() {
+    if (!rainRadarTimer) return;
+    clearInterval(rainRadarTimer);
+    rainRadarTimer = null;
+    const btn = document.getElementById('radarPlayBtn');
+    if (btn) btn.innerHTML = '&#9654;';
+}
+
+window.toggleRadarPlay = function() {
+    if (rainRadarTimer) pauseRainRadar();
+    else startRainRadar();
+};
+
+window.radarSeek = function(v) {
+    pauseRainRadar();
+    rainRadarIdx = parseInt(v, 10);
+    showRainRadarFrame(rainRadarIdx);
 };
 
 // ─── Feedback ────────────────────────────────────────────────────────────────
@@ -1390,7 +1542,7 @@ function renderFeedbackHistory(items) {
             <div>
                 <span class="feedback-entry-date">${fb.date}</span>
                 <span>${sailed}</span>
-                ${fb.comentario ? `<br><small style="color: var(--text-dim)">${fb.comentario}</small>` : ''}
+                ${fb.comentario ? `<br><small style="color: var(--text-dim)">${escapeHtml(fb.comentario)}</small>` : ''}
             </div>
             <div class="feedback-entry-scores">
                 <div class="fb-app">

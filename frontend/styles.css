@@ -855,6 +855,63 @@ h2 {
     display: block;
 }
 
+/* ─── Rain Radar (RainViewer) ────────────────────────────────────────────── */
+#rainRadarMap { background: #0a1220; }
+#rainRadarMap .leaflet-container { background: #0a1220; }
+.radar-controls {
+    display: flex;
+    align-items: center;
+    gap: 0.75rem;
+    padding: 0.55rem 0.8rem;
+    margin-top: 0.5rem;
+    background: var(--glass);
+    backdrop-filter: blur(8px);
+    border: 1px solid var(--glass-border);
+    border-radius: 10px;
+}
+.radar-btn {
+    background: var(--accent);
+    border: none;
+    color: white;
+    width: 34px;
+    height: 34px;
+    border-radius: 50%;
+    font-size: 0.85rem;
+    cursor: pointer;
+    flex-shrink: 0;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+}
+.radar-btn:hover { filter: brightness(1.1); }
+.radar-time {
+    font-variant-numeric: tabular-nums;
+    font-weight: 600;
+    color: var(--text);
+    min-width: 48px;
+}
+.radar-slider {
+    flex: 1;
+    accent-color: var(--accent);
+    min-width: 0;
+}
+.radar-kind {
+    font-size: 0.7rem;
+    text-transform: uppercase;
+    letter-spacing: 0.05em;
+    color: var(--text-dim);
+    min-width: 70px;
+    text-align: right;
+}
+.radar-kind.forecast { color: #f59e0b; }
+.radar-attr {
+    font-size: 0.72rem;
+    color: var(--text-dim);
+    margin-top: 0.5rem;
+    text-align: right;
+}
+.radar-attr a { color: var(--text-dim); text-decoration: underline; }
+
 /* ─── Tides ───────────────────────────────────────────────────────────────── */
 .tides-tabs {
     display: flex;
