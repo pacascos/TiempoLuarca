@@ -282,6 +282,40 @@ h2 {
     margin-top: 0.2rem;
 }
 
+/* Botón colapsar/expandir alerta */
+.alert-toggle {
+    flex-shrink: 0;
+    background: none;
+    border: none;
+    cursor: pointer;
+    color: inherit;
+    opacity: 0.6;
+    padding: 0.2rem;
+    margin: -0.2rem -0.2rem 0 0;
+    line-height: 1;
+    transition: opacity 0.2s;
+}
+.alert-toggle:hover { opacity: 1; }
+.alert-toggle-icon {
+    display: inline-block;
+    font-size: 0.7rem;
+    transition: transform 0.3s;
+}
+
+/* Estado colapsado: solo se ve el nivel + zona, sin animación de pulso */
+.alert-banner.collapsed {
+    animation: none;
+    padding-top: 0.55rem;
+    padding-bottom: 0.55rem;
+}
+.alert-banner.collapsed .alert-headline,
+.alert-banner.collapsed .alert-detail {
+    display: none;
+}
+.alert-banner.collapsed .alert-toggle-icon {
+    transform: rotate(180deg);
+}
+
 /* ─── Help ────────────────────────────────────────────────────────────────── */
 .help-btn {
     width: 28px;

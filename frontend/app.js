@@ -336,6 +336,36 @@ function renderWindBarb(speedKn, dirDeg) {
 
 }
 
+const ALERTS_COLLAPSED_KEY = 'alertasColapsadas';
+
+function getCollapsedAlerts() {
+    try {
+        return new Set(JSON.parse(localStorage.getItem(ALERTS_COLLAPSED_KEY) || '[]'));
+    } catch (e) {
+        return new Set();
+    }
+}
+
+function setCollapsedAlerts(set) {
+    try {
+        localStorage.setItem(ALERTS_COLLAPSED_KEY, JSON.stringify([...set]));
+    } catch (e) { /* ignore */ }
+}
+
+function alertKey(a) {
+    return `${a.nivel || ''}|${a.zona || ''}|${a.headline || a.fenomeno || ''}|${a.inicio || ''}`;
+}
+
+window.toggleAlert = function(btn) {
+    const el = btn.closest('.alert-banner');
+    if (!el) return;
+    const key = el.dataset.key;
+    const collapsed = getCollapsedAlerts();
+    const isCollapsed = el.classList.toggle('collapsed');
+    if (isCollapsed) collapsed.add(key); else collapsed.delete(key);
+    setCollapsedAlerts(collapsed);
+};
+
 function renderAlerts(alertas) {
     const container = document.getElementById('alertsContainer');
     if (!alertas || alertas.length === 0) {
@@ -344,9 +374,17 @@ function renderAlerts(alertas) {
     }
     const levelLabels = { rojo: 'Alerta roja', naranja: 'Alerta naranja', amarillo: 'Aviso amarillo' };
     const levelIcons = { rojo: 'wi-hurricane', naranja: 'wi-storm-warning', amarillo: 'wi-small-craft-advisory' };
+    // Limpiar de localStorage las claves de alertas que ya no están activas
+    const activeKeys = new Set(alertas.map(alertKey));
+    const collapsed = getCollapsedAlerts();
+    const pruned = new Set([...collapsed].filter(k => activeKeys.has(k)));
+    if (pruned.size !== collapsed.size) setCollapsedAlerts(pruned);
+
     container.innerHTML = alertas.map(a => {
         const nivel = a.nivel || 'amarillo';
-        return `<div class="alert-banner ${nivel}">
+        const key = alertKey(a);
+        const isCollapsed = pruned.has(key);
+        return `<div class="alert-banner ${nivel}${isCollapsed ? ' collapsed' : ''}" data-key="${escapeHtml(key)}">
             <div class="alert-icon"><i class="wi ${levelIcons[nivel] || 'wi-storm-warning'}"></i></div>
             <div class="alert-content">
                 <div class="alert-level">${levelLabels[nivel] || 'Aviso'} - ${escapeHtml(a.zona || 'Costa asturiana')}</div>
@@ -354,6 +392,9 @@ function renderAlerts(alertas) {
                 ${a.descripcion ? `<div class="alert-detail">${escapeHtml(a.descripcion)}</div>` : ''}
                 ${a.inicio ? `<div class="alert-detail">Desde: ${a.inicio.replace('T',' ').slice(0,16)} ${a.fin ? '· Hasta: ' + a.fin.replace('T',' ').slice(0,16) : ''}</div>` : ''}
             </div>
+            <button type="button" class="alert-toggle" onclick="toggleAlert(this)" aria-label="Mostrar u ocultar detalle de la alerta" title="Mostrar/ocultar detalle">
+                <span class="alert-toggle-icon">&#9650;</span>
+            </button>
         </div>`;
     }).join('');
 }
