@@ -351,9 +351,23 @@ async def get_aemet_alertas_costeras() -> list | None:
                 logger.warning("AEMET alertas: formato no reconocido")
                 return []
 
-        # Filtrar solo alertas costeras de Asturias occidental (Luarca)
-        costeras = [a for a in alertas if a.get("es_costera") and a.get("nivel") != "verde"]
-        logger.info("AEMET alertas costeras activas: %d", len(costeras))
+        # Filtrar costeras, descartando avisos verdes y los ya caducados (fin < ahora)
+        now = datetime.now(timezone.utc)
+
+        def vigente(a: dict) -> bool:
+            fin = a.get("fin")
+            if not fin:
+                return True
+            try:
+                return datetime.fromisoformat(fin) >= now
+            except Exception:
+                return True
+
+        costeras = [
+            a for a in alertas
+            if a.get("es_costera") and a.get("nivel") != "verde" and vigente(a)
+        ]
+        logger.info("AEMET alertas costeras vigentes: %d", len(costeras))
         return costeras
 
     except Exception as e:
@@ -377,7 +391,12 @@ def _parse_cap_xml(xml_bytes: bytes) -> list:
 
     for alert in alerts:
         for info in alert.findall("cap:info", ns):
-            evento = ""
+            # Evitar duplicados: AEMET incluye cada aviso en es-ES y en-GB.
+            # Nos quedamos solo con la versión en español.
+            lang = info.findtext("cap:language", "", ns)
+            if lang and not lang.lower().startswith("es"):
+                continue
+
             nivel = "verde"
             fenomeno = ""
             es_costera = False
@@ -397,25 +416,18 @@ def _parse_cap_xml(xml_bytes: bytes) -> list:
                 if "fenomeno" in name.lower() or "parametro" in name.lower():
                     fenomeno = val
 
-            # Leer event codes
-            for ec in info.findall("cap:eventCode", ns):
-                name = ec.findtext("cap:valueName", "", ns)
-                val = ec.findtext("cap:value", "", ns)
-                if val and "CO" in val:
-                    es_costera = True
-                if val:
-                    evento = val
-
-            # Leer áreas
+            # Zona costera marítima: geocódigo de Asturias terminado en "C"
+            # (633301C = Costa litoral occidental, 633302C = oriental). El resto
+            # (633303/04/05 = interior, 633301/02 = franja litoral terrestre) se descarta.
             for area in info.findall("cap:area", ns):
                 area_desc = area.findtext("cap:areaDesc", "", ns)
                 for gc in area.findall("cap:geocode", ns):
                     val = gc.findtext("cap:value", "", ns)
-                    if val and val.startswith("6333"):
+                    if val and val.startswith("6333") and val.endswith("C"):
                         es_costera = True
                         zona = area_desc
 
-            if es_costera or "cost" in fenomeno.lower() or "cost" in headline.lower():
+            if es_costera:
                 alertas.append({
                     "nivel": nivel,
                     "severity": severity,
