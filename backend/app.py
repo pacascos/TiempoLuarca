@@ -657,11 +657,11 @@ _solunar_cache: dict = {}
 
 @app.get("/api/solunar")
 async def api_solunar():
-    """Actividad solunar (peces) del día actual. Cálculo local con ephem."""
+    """Actividad solunar (peces) de las próximas 24h. Cálculo local con ephem."""
     now = now_local()
-    key = now.strftime("%Y-%m-%d")
+    key = now.strftime("%Y-%m-%d %H")  # la ventana rueda con la hora
     if key not in _solunar_cache:
-        _solunar_cache.clear()  # solo interesa el día actual
+        _solunar_cache.clear()  # solo interesa la ventana actual
         _solunar_cache[key] = compute_solunar(now, LUARCA_LAT, LUARCA_LON)
     return _solunar_cache[key]
 

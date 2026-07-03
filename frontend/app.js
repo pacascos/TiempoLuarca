@@ -1237,7 +1237,10 @@ function drawSolunarChart() {
     const plotW = W - pad.left - pad.right;
     const plotH = H - pad.top - pad.bottom;
 
-    const xPos = m => pad.left + (m / 1440) * plotW;
+    // Ventana de 24h desde la hora actual (minutos relativos a las 00:00 de `fecha`)
+    const win = solunarData.ventana || { inicio_min: 0, fin_min: 1440 };
+    const winSpan = win.fin_min - win.inicio_min;
+    const xPos = m => pad.left + ((m - win.inicio_min) / winSpan) * plotW;
     const yPos = v => pad.top + plotH - (v / 100) * plotH;
 
     // ─── Bandas de periodos mayores/menores ────
@@ -1252,7 +1255,7 @@ function drawSolunarChart() {
         if (x1 <= x0) continue;
         ctx.fillStyle = `rgba(255, 179, 0, ${b.alpha})`;
         ctx.fillRect(x0, pad.top, x1 - x0, plotH);
-        if (b.centro_min >= 0 && b.centro_min <= 1440) {
+        if (b.centro_min >= win.inicio_min && b.centro_min <= win.fin_min) {
             ctx.font = '11px -apple-system, sans-serif';
             ctx.textAlign = 'center';
             ctx.fillText(b.icon, xPos(b.centro_min), pad.top + 14);
@@ -1271,10 +1274,11 @@ function drawSolunarChart() {
         ctx.fillText(String(v), pad.left - 6, y + 3);
     }
 
-    // ─── Horas en eje X ────
+    // ─── Horas en eje X (cada 3h, la ventana puede cruzar medianoche) ────
     ctx.fillStyle = '#8895a7';
     ctx.textAlign = 'center';
-    for (let m = 0; m <= 1440; m += 180) {
+    const firstTick = Math.ceil(win.inicio_min / 180) * 180;
+    for (let m = firstTick; m <= win.fin_min; m += 180) {
         const x = xPos(m);
         const hh = Math.floor(m / 60) % 24;
         ctx.fillText(String(hh).padStart(2, '0') + ':00', x, H - pad.bottom + 14);
@@ -1302,21 +1306,19 @@ function drawSolunarChart() {
     curva.forEach((p, i) => { const x = xPos(p.m), y = yPos(p.v); i === 0 ? ctx.moveTo(x, y) : ctx.lineTo(x, y); });
     ctx.stroke();
 
-    // ─── Sol: salida y puesta ────
-    for (const [key, icon] of [['salida', '☀'], ['puesta', '☽']]) {
-        const t = solunarData.sol && solunarData.sol[key];
-        if (!t) continue;
-        const [hh, mm] = t.split(':').map(Number);
-        const x = xPos(hh * 60 + mm);
+    // ─── Sol: salidas y puestas dentro de la ventana ────
+    for (const ev of solunarData.sol_eventos || []) {
+        if (ev.m < win.inicio_min || ev.m > win.fin_min) continue;
         ctx.fillStyle = '#FFD600';
         ctx.font = '11px -apple-system, sans-serif';
         ctx.textAlign = 'center';
-        ctx.fillText(icon, x, pad.top + plotH - 5);
+        ctx.fillText(ev.tipo === 'salida' ? '☀' : '☽', xPos(ev.m), pad.top + plotH - 5);
     }
 
-    // ─── Marcador AHORA ────
-    const now = new Date();
-    const nowMins = now.getHours() * 60 + now.getMinutes();
+    // ─── Marcador AHORA (minutos relativos a las 00:00 de `fecha`) ────
+    const base = new Date(solunarData.fecha + 'T00:00:00');
+    const nowMins = (new Date() - base) / 60000;
+    if (nowMins < win.inicio_min || nowMins > win.fin_min) return;
     const xNow = xPos(nowMins);
     ctx.strokeStyle = '#ffffffcc';
     ctx.lineWidth = 1.5;
@@ -1362,18 +1364,21 @@ function renderSolunarInfo() {
         <div class="tide-next-time" style="font-size: 0.85rem">${solunarData.fase.nombre}</div>
     </div>`;
 
+    const win = solunarData.ventana || { inicio_min: 0, fin_min: 1440 };
     const periodos = [
         ...(solunarData.mayores || []),
         ...(solunarData.menores || []),
-    ].filter(p => p.centro_min >= 0 && p.centro_min <= 1440)
+    ].filter(p => p.centro_min >= win.inicio_min && p.centro_min <= win.fin_min)
      .sort((a, b) => a.centro_min - b.centro_min);
 
     for (const p of periodos) {
         const esMayor = p.tipo === 'mayor';
         const sol = p.coincide_sol ? ' ☀' : '';
+        const inicioMin = p.centro_min - (esMayor ? 60 : 30);
+        const manana = inicioMin >= 1440 ? ' <span style="opacity:0.6">(mañana)</span>' : '';
         html += `<div class="tide-next-item">
             <div class="tide-next-type">${esMayor ? '\u{1F41F}\u{1F41F} Mayor' : '\u{1F41F} Menor'}${sol}</div>
-            <div class="tide-next-time">${p.inicio} - ${p.fin}</div>
+            <div class="tide-next-time">${p.inicio} - ${p.fin}${manana}</div>
         </div>`;
     }
 

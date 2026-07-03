@@ -108,17 +108,23 @@ def _fase_lunar(day_noon_utc: datetime) -> dict:
 
 
 def compute_solunar(now_local: datetime, lat: float, lon: float) -> dict:
-    """Actividad solunar del día actual para (lat, lon).
+    """Actividad solunar de las próximas 24h para (lat, lon).
 
-    Devuelve periodos mayores/menores, rating del día, fase lunar y una curva
-    de actividad 0-100 muestreada cada 10 min (para pintar la gráfica).
+    La ventana empieza en la hora actual (redondeada a la hora en punto) y
+    cubre 24h hacia delante. Devuelve periodos mayores/menores, rating,
+    fase lunar y una curva de actividad 0-100 muestreada cada 10 min.
+    Los minutos de la curva y los periodos son relativos a las 00:00 locales
+    del día de `fecha` (pueden superar 1440 si caen mañana).
     """
     day_start = now_local.replace(hour=0, minute=0, second=0, microsecond=0)
-    day_end = day_start + timedelta(days=1)
-    # Margen de 3h a cada lado: un tránsito a las 23:30 de ayer sigue
-    # aportando actividad a primera hora de hoy
-    win_start = (day_start - timedelta(hours=3)).astimezone(timezone.utc)
-    win_end = (day_end + timedelta(hours=3)).astimezone(timezone.utc)
+    ini_min = now_local.hour * 60  # ventana desde la hora en punto actual
+    fin_min = ini_min + 1440
+    ventana_ini = day_start + timedelta(minutes=ini_min)
+    ventana_fin = day_start + timedelta(minutes=fin_min)
+    # Margen de 3h a cada lado: un tránsito justo antes de la ventana sigue
+    # aportando actividad al inicio de esta
+    win_start = (ventana_ini - timedelta(hours=3)).astimezone(timezone.utc)
+    win_end = (ventana_fin + timedelta(hours=3)).astimezone(timezone.utc)
 
     obs = ephem.Observer()
     obs.lat = str(lat)
@@ -135,16 +141,16 @@ def compute_solunar(now_local: datetime, lat: float, lon: float) -> dict:
     moonsets = _collect_events(obs, moon, "next_setting", win_start, win_end)
 
     sunrises = _collect_events(obs, sun, "next_rising",
-                               day_start.astimezone(timezone.utc),
-                               day_end.astimezone(timezone.utc))
+                               ventana_ini.astimezone(timezone.utc),
+                               ventana_fin.astimezone(timezone.utc))
     sunsets = _collect_events(obs, sun, "next_setting",
-                              day_start.astimezone(timezone.utc),
-                              day_end.astimezone(timezone.utc))
+                              ventana_ini.astimezone(timezone.utc),
+                              ventana_fin.astimezone(timezone.utc))
     sol_events = sunrises + sunsets
 
-    day_noon_utc = (day_start + timedelta(hours=12)).astimezone(timezone.utc)
-    rating, rating_label = _rating_dia(day_noon_utc)
-    fase = _fase_lunar(day_noon_utc)
+    centro_ventana_utc = (ventana_ini + timedelta(hours=12)).astimezone(timezone.utc)
+    rating, rating_label = _rating_dia(centro_ventana_utc)
+    fase = _fase_lunar(centro_ventana_utc)
 
     def _mins(dt: datetime) -> float:
         """Minutos desde las 00:00 locales de hoy (puede ser <0 o >1440)."""
@@ -157,8 +163,8 @@ def compute_solunar(now_local: datetime, lat: float, lon: float) -> dict:
         out = []
         for ev in events:
             centro = _mins(ev)
-            # Solo listar periodos que tocan el día actual
-            if centro + half_min < 0 or centro - half_min > 1440:
+            # Solo listar periodos que tocan la ventana de 24h
+            if centro + half_min < ini_min or centro - half_min > fin_min:
                 continue
             out.append({
                 "tipo": tipo,
@@ -185,21 +191,25 @@ def compute_solunar(now_local: datetime, lat: float, lon: float) -> dict:
         bumps.append((_mins(ev), amp, SIGMA_MENOR))
 
     curva = []
-    for m in range(0, 1441, 10):
+    for m in range(ini_min, fin_min + 1, 10):
         v = BASELINE * (rating / 70.0)
         for centro, amp, sigma in bumps:
             v += amp * math.exp(-((m - centro) ** 2) / (2 * sigma ** 2))
         curva.append({"m": m, "v": round(max(0.0, min(100.0, v)))})
 
+    sol_eventos = sorted(
+        [{"tipo": "salida", "m": round(_mins(ev)), "hora": _hhmm(ev)} for ev in sunrises]
+        + [{"tipo": "puesta", "m": round(_mins(ev)), "hora": _hhmm(ev)} for ev in sunsets],
+        key=lambda e: e["m"],
+    )
+
     return {
         "fecha": day_start.strftime("%Y-%m-%d"),
+        "ventana": {"inicio_min": ini_min, "fin_min": fin_min},
         "rating": rating,
         "rating_label": rating_label,
         "fase": fase,
-        "sol": {
-            "salida": _hhmm(sunrises[0]) if sunrises else None,
-            "puesta": _hhmm(sunsets[0]) if sunsets else None,
-        },
+        "sol_eventos": sol_eventos,
         "mayores": mayores,
         "menores": menores,
         "curva": curva,
