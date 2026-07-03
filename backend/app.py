@@ -14,7 +14,8 @@ from fastapi.staticfiles import StaticFiles
 from fastapi.responses import HTMLResponse, FileResponse
 from apscheduler.schedulers.asyncio import AsyncIOScheduler
 
-from backend.config import ROOT_PATH
+from backend.config import LUARCA_LAT, LUARCA_LON, ROOT_PATH
+from backend.solunar import compute_solunar
 from backend.data_sources import (
     get_aemet_observacion_busto, get_aemet_prediccion_valdes,
     get_aemet_prediccion_costera, get_aemet_prediccion_playa,
@@ -649,6 +650,20 @@ async def api_tides():
     if not _cache:
         raise HTTPException(503, "Datos no disponibles todavía")
     return _cache.get("mareas") or {}
+
+
+_solunar_cache: dict = {}
+
+
+@app.get("/api/solunar")
+async def api_solunar():
+    """Actividad solunar (peces) del día actual. Cálculo local con ephem."""
+    now = now_local()
+    key = now.strftime("%Y-%m-%d")
+    if key not in _solunar_cache:
+        _solunar_cache.clear()  # solo interesa el día actual
+        _solunar_cache[key] = compute_solunar(now, LUARCA_LAT, LUARCA_LON)
+    return _solunar_cache[key]
 
 
 @app.get("/api/summary")

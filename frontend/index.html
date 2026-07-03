@@ -248,6 +248,21 @@
             <div class="moon-section" id="moonSection"></div>
         </section>
 
+        <!-- Actividad solunar (peces) -->
+        <section class="tides-section solunar-section">
+            <h2>Pesca: actividad solunar <span class="solunar-rating" id="solunarRating"></span></h2>
+            <div class="tide-chart-container">
+                <canvas id="solunarCanvas" width="800" height="180"></canvas>
+            </div>
+            <div class="tide-next" id="solunarInfo"></div>
+            <p class="solunar-disclaimer">
+                Periodos de actividad de los peces seg&uacute;n la teor&iacute;a solunar: m&aacute;xima
+                cuando la luna cruza el meridiano (periodos mayores, 2h) y en el orto/ocaso lunar
+                (menores, 1h), con luna nueva o llena como amplificador. Es una teor&iacute;a
+                tradicional sin evidencia cient&iacute;fica s&oacute;lida &mdash; t&oacute;malo como orientaci&oacute;n, no como promesa.
+            </p>
+        </section>
+
         <!-- Simulador 3D: efecto del periodo en la lancha -->
         <section class="maps-section">
             <h2 class="collapsible-header" onclick="toggleSection('simulador')">

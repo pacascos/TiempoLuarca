@@ -99,6 +99,7 @@ async function loadAll() {
         loadForecast(),
         loadExtended(),
         loadTides(),
+        loadSolunar(),
         loadFeedbackHistory(),
     ]);
 }
@@ -1192,7 +1193,192 @@ function renderTideInfo(allPts, nowMins) {
 
 window.addEventListener('resize', () => {
     if (tidesData) drawTideChart();
+    if (solunarData) drawSolunarChart();
 });
+
+// ─── Actividad solunar (peces) ────────────────────────────────────────────────
+
+let solunarData = null;
+
+const SOLUNAR_RATING_COLORS = {
+    'Muy alta': '#00C853',
+    'Alta': '#64DD17',
+    'Media': '#FFD600',
+    'Baja': '#8895a7',
+};
+
+async function loadSolunar() {
+    try {
+        const res = await fetch(apiUrl('api/solunar'));
+        solunarData = await res.json();
+        drawSolunarChart();
+        renderSolunarInfo();
+    } catch (e) {
+        console.error('Error loading solunar:', e);
+    }
+}
+
+function drawSolunarChart() {
+    if (!solunarData || !solunarData.curva) return;
+    const canvas = document.getElementById('solunarCanvas');
+    if (!canvas) return;
+
+    const ctx = canvas.getContext('2d');
+    const dpr = window.devicePixelRatio || 1;
+    const rect = canvas.getBoundingClientRect();
+    canvas.width = rect.width * dpr;
+    canvas.height = rect.height * dpr;
+    ctx.scale(dpr, dpr);
+    const W = rect.width;
+    const H = rect.height;
+    ctx.clearRect(0, 0, W, H);
+
+    const pad = { top: 26, right: 15, bottom: 26, left: 40 };
+    const plotW = W - pad.left - pad.right;
+    const plotH = H - pad.top - pad.bottom;
+
+    const xPos = m => pad.left + (m / 1440) * plotW;
+    const yPos = v => pad.top + plotH - (v / 100) * plotH;
+
+    // ─── Bandas de periodos mayores/menores ────
+    const bandas = [
+        ...(solunarData.mayores || []).map(p => ({ ...p, alpha: 0.16, icon: '\u{1F41F}\u{1F41F}' })),
+        ...(solunarData.menores || []).map(p => ({ ...p, alpha: 0.07, icon: '\u{1F41F}' })),
+    ];
+    for (const b of bandas) {
+        const half = b.tipo === 'mayor' ? 60 : 30;
+        const x0 = Math.max(xPos(b.centro_min - half), pad.left);
+        const x1 = Math.min(xPos(b.centro_min + half), pad.left + plotW);
+        if (x1 <= x0) continue;
+        ctx.fillStyle = `rgba(255, 179, 0, ${b.alpha})`;
+        ctx.fillRect(x0, pad.top, x1 - x0, plotH);
+        if (b.centro_min >= 0 && b.centro_min <= 1440) {
+            ctx.font = '11px -apple-system, sans-serif';
+            ctx.textAlign = 'center';
+            ctx.fillText(b.icon, xPos(b.centro_min), pad.top + 14);
+        }
+    }
+
+    // ─── Grid horizontal (indice 0-100) ────
+    ctx.font = '10px -apple-system, sans-serif';
+    for (const v of [0, 50, 100]) {
+        const y = yPos(v);
+        ctx.strokeStyle = '#1e3050';
+        ctx.lineWidth = 0.5;
+        ctx.beginPath(); ctx.moveTo(pad.left, y); ctx.lineTo(pad.left + plotW, y); ctx.stroke();
+        ctx.fillStyle = '#8895a7';
+        ctx.textAlign = 'right';
+        ctx.fillText(String(v), pad.left - 6, y + 3);
+    }
+
+    // ─── Horas en eje X ────
+    ctx.fillStyle = '#8895a7';
+    ctx.textAlign = 'center';
+    for (let m = 0; m <= 1440; m += 180) {
+        const x = xPos(m);
+        const hh = Math.floor(m / 60) % 24;
+        ctx.fillText(String(hh).padStart(2, '0') + ':00', x, H - pad.bottom + 14);
+        ctx.strokeStyle = '#1e305030';
+        ctx.lineWidth = 0.5;
+        ctx.beginPath(); ctx.moveTo(x, pad.top); ctx.lineTo(x, pad.top + plotH); ctx.stroke();
+    }
+
+    // ─── Area + curva de actividad ────
+    const curva = solunarData.curva;
+    const grad = ctx.createLinearGradient(0, pad.top, 0, pad.top + plotH);
+    grad.addColorStop(0, 'rgba(255, 179, 0, 0.25)');
+    grad.addColorStop(1, 'rgba(255, 179, 0, 0.01)');
+    ctx.fillStyle = grad;
+    ctx.beginPath();
+    ctx.moveTo(xPos(curva[0].m), pad.top + plotH);
+    for (const p of curva) ctx.lineTo(xPos(p.m), yPos(p.v));
+    ctx.lineTo(xPos(curva[curva.length - 1].m), pad.top + plotH);
+    ctx.closePath();
+    ctx.fill();
+
+    ctx.strokeStyle = '#FFB300';
+    ctx.lineWidth = 2.5;
+    ctx.beginPath();
+    curva.forEach((p, i) => { const x = xPos(p.m), y = yPos(p.v); i === 0 ? ctx.moveTo(x, y) : ctx.lineTo(x, y); });
+    ctx.stroke();
+
+    // ─── Sol: salida y puesta ────
+    for (const [key, icon] of [['salida', '☀'], ['puesta', '☽']]) {
+        const t = solunarData.sol && solunarData.sol[key];
+        if (!t) continue;
+        const [hh, mm] = t.split(':').map(Number);
+        const x = xPos(hh * 60 + mm);
+        ctx.fillStyle = '#FFD600';
+        ctx.font = '11px -apple-system, sans-serif';
+        ctx.textAlign = 'center';
+        ctx.fillText(icon, x, pad.top + plotH - 5);
+    }
+
+    // ─── Marcador AHORA ────
+    const now = new Date();
+    const nowMins = now.getHours() * 60 + now.getMinutes();
+    const xNow = xPos(nowMins);
+    ctx.strokeStyle = '#ffffffcc';
+    ctx.lineWidth = 1.5;
+    ctx.beginPath(); ctx.moveTo(xNow, pad.top); ctx.lineTo(xNow, pad.top + plotH); ctx.stroke();
+
+    // Interpolar valor actual
+    let vNow = null;
+    for (let i = 0; i < curva.length - 1; i++) {
+        if (curva[i].m <= nowMins && curva[i + 1].m >= nowMins) {
+            const t = (nowMins - curva[i].m) / (curva[i + 1].m - curva[i].m);
+            vNow = curva[i].v + t * (curva[i + 1].v - curva[i].v);
+            break;
+        }
+    }
+    if (vNow !== null) {
+        const yNow = yPos(vNow);
+        ctx.beginPath(); ctx.arc(xNow, yNow, 7, 0, Math.PI * 2);
+        ctx.fillStyle = '#ffffff'; ctx.fill();
+        ctx.strokeStyle = '#0a1628'; ctx.lineWidth = 2; ctx.stroke();
+        ctx.beginPath(); ctx.arc(xNow, yNow, 4, 0, Math.PI * 2);
+        ctx.fillStyle = '#FFB300'; ctx.fill();
+        ctx.fillStyle = '#ffffff';
+        ctx.font = 'bold 10px -apple-system, sans-serif';
+        ctx.textAlign = 'center';
+        ctx.fillText('AHORA', xNow, pad.top - 8);
+    }
+}
+
+function renderSolunarInfo() {
+    if (!solunarData) return;
+
+    const ratingEl = document.getElementById('solunarRating');
+    const color = SOLUNAR_RATING_COLORS[solunarData.rating_label] || '#8895a7';
+    if (ratingEl) {
+        ratingEl.innerHTML = `<span style="color:${color}">${solunarData.rating_label}</span>`;
+    }
+
+    const container = document.getElementById('solunarInfo');
+    if (!container) return;
+
+    let html = `<div class="tide-next-item" style="border-top: 3px solid ${color}">
+        <div class="tide-next-type" style="color:${color}">${solunarData.fase.emoji} Actividad ${solunarData.rating_label.toLowerCase()}</div>
+        <div class="tide-next-time" style="font-size: 0.85rem">${solunarData.fase.nombre}</div>
+    </div>`;
+
+    const periodos = [
+        ...(solunarData.mayores || []),
+        ...(solunarData.menores || []),
+    ].filter(p => p.centro_min >= 0 && p.centro_min <= 1440)
+     .sort((a, b) => a.centro_min - b.centro_min);
+
+    for (const p of periodos) {
+        const esMayor = p.tipo === 'mayor';
+        const sol = p.coincide_sol ? ' ☀' : '';
+        html += `<div class="tide-next-item">
+            <div class="tide-next-type">${esMayor ? '\u{1F41F}\u{1F41F} Mayor' : '\u{1F41F} Menor'}${sol}</div>
+            <div class="tide-next-time">${p.inicio} - ${p.fin}</div>
+        </div>`;
+    }
+
+    container.innerHTML = html;
+}
 
 // ─── Moon ────────────────────────────────────────────────────────────────────
 

@@ -974,6 +974,11 @@ h2 {
     height: 220px;
     display: block;
 }
+#solunarCanvas {
+    width: 100%;
+    height: 180px;
+    display: block;
+}
 .tide-next {
     margin-top: 0.75rem;
     display: flex;
@@ -1011,6 +1016,20 @@ h2 {
 .tide-next-item.pleamar .tide-next-type { color: #FFAB00; }
 .tide-next-item.bajamar { border-top: 3px solid var(--accent); }
 .tide-next-item.bajamar .tide-next-type { color: var(--accent); }
+
+/* ─── Solunar ─────────────────────────────────────────────────────────────── */
+.solunar-rating {
+    font-size: 0.8rem;
+    font-weight: 700;
+    margin-left: 0.4rem;
+    vertical-align: middle;
+}
+.solunar-disclaimer {
+    margin-top: 0.9rem;
+    font-size: 0.7rem;
+    color: var(--text-dim);
+    line-height: 1.5;
+}
 
 /* ─── Moon ────────────────────────────────────────────────────────────────── */
 .moon-section {
