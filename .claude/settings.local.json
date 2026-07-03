@@ -97,7 +97,28 @@
       "Bash(pkill -f \"http.server 8810\")",
       "Bash(kill 17894)",
       "Bash(nohup .venv/bin/uvicorn backend.app:app --port 8000)",
-      "Bash(echo \"started pid $!\")"
+      "Bash(echo \"started pid $!\")",
+      "Bash(curl -s --max-time 5 http://localhost:8000/api/current)",
+      "Bash(python3 -c ' *)",
+      "Bash(lsof -iTCP -sTCP:LISTEN -P)",
+      "Bash(lsof -iTCP:8000 -sTCP:LISTEN)",
+      "Bash(curl -s --max-time 2 http://localhost:8000/api/current -o /dev/null)",
+      "Bash(break)",
+      "Bash(curl -s --max-time 10 http://localhost:8000/api/current)",
+      "Bash(curl -s http://localhost:8000/api/extended)",
+      "Bash(pkill -f \"backend.app:app\")",
+      "Bash(kill 41895 42031)",
+      "Bash(curl -s --max-time 10 \"https://api.solunar.org/solunar/43.545,-6.535,$\\(date +%Y%m%d\\),2\")",
+      "Bash(curl -sv --max-time 10 \"https://api.solunar.org/solunar/43.545,-6.535,$\\(date +%Y%m%d\\),2\")",
+      "Bash(python3 -c \"import ephem\")",
+      "Skill(dataviz)",
+      "Bash(curl -s --max-time 2 http://localhost:8000/api/solunar -o /dev/null)",
+      "Bash(curl -s http://localhost:8000/api/solunar)",
+      "Bash(git add *)",
+      "Bash(git commit -m ' *)",
+      "Bash(git push *)",
+      "Bash(ps -p 3125,3188 -o pid,lstart,command)",
+      "Bash(curl -s --max-time 5 http://localhost:8000/api/solunar)"
     ]
   }
 }
