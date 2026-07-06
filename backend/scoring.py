@@ -282,29 +282,22 @@ def _score_presion(trend_6h: float | None) -> int:
 
 
 def _score_nubosidad(pct: float | None) -> int:
-    """Cobertura de nubes % → score 10(despejado)-1(cubierto).
-    Afecta al confort y a la seguridad (visibilidad en costa)."""
+    """Cobertura de nubes % → score 10(despejado)-5(cubierto).
+    Solo es confort: un día gris no es peligroso, así que nunca baja de 5.
+    La falta de visibilidad real ya la penaliza _score_visibilidad."""
     if pct is None:
         return 7
     if pct <= 10:
         return 10
-    if pct <= 20:
+    if pct <= 25:
         return 9
-    if pct <= 30:
-        return 8
     if pct <= 45:
-        return 7
-    if pct <= 55:
-        return 6
+        return 8
     if pct <= 65:
-        return 5
-    if pct <= 75:
-        return 4
+        return 7
     if pct <= 85:
-        return 3
-    if pct <= 95:
-        return 2
-    return 1
+        return 6
+    return 5
 
 
 def _score_lluvia(prob: float | None, mm: float | None = None) -> int:
