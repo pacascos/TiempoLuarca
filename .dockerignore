@@ -1,0 +1,11 @@
+.env
+.venv/
+__pycache__/
+*.pyc
+data/
+.git/
+.claude/
+README.md
+WEATHER_API_RESEARCH.md
+scoring_explicado.html
+fly.toml

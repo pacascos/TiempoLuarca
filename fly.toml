@@ -1,0 +1,38 @@
+app = "tiempoluarca"
+primary_region = "mad"
+
+[build]
+
+[env]
+  TZ = "Europe/Madrid"
+  # Ruta absoluta: database.py hace os.path.join(raiz, DATABASE_PATH) y con
+  # una ruta absoluta el join devuelve /data/... directamente
+  DATABASE_PATH = "/data/tiempoluarca.db"
+
+[mounts]
+  source = "tiempoluarca_data"
+  destination = "/data"
+
+[http_service]
+  internal_port = 8000
+  force_https = true
+  # APScheduler vive dentro del proceso: la maquina no puede pararse por
+  # inactividad o se pierde la ingesta periodica y el historico horario
+  auto_stop_machines = "off"
+  auto_start_machines = true
+  min_machines_running = 1
+
+  [[http_service.checks]]
+    # No usar "/" como healthcheck: registra page_views y ensuciaria las
+    # estadisticas de uso con las visitas del checker
+    path = "/api/cache-status"
+    method = "GET"
+    interval = "30s"
+    timeout = "5s"
+    # El lifespan hace un refresh forzado de todas las fuentes (AEMET, IHM,
+    # Open-Meteo) antes de aceptar trafico; darle margen en el arranque
+    grace_period = "90s"
+
+[[vm]]
+  size = "shared-cpu-1x"
+  memory = "512mb"
