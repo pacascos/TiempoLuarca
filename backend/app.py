@@ -11,7 +11,7 @@ from zoneinfo import ZoneInfo
 
 from fastapi import FastAPI, HTTPException, Request
 from fastapi.staticfiles import StaticFiles
-from fastapi.responses import HTMLResponse, FileResponse
+from fastapi.responses import HTMLResponse, FileResponse, RedirectResponse
 from apscheduler.schedulers.asyncio import AsyncIOScheduler
 
 from backend.config import LUARCA_LAT, LUARCA_LON, ROOT_PATH
@@ -376,6 +376,17 @@ async def index(request: Request):
     except Exception as e:
         logger.error("Error guardando page view: %s", e)
     return FileResponse("frontend/index.html")
+
+
+# En el servidor antiguo la app colgaba de /tiempo tras un reverse proxy;
+# mantener las URLs viejas funcionando redirigiendo al equivalente en raíz
+@app.get("/tiempo")
+@app.get("/tiempo/{resto:path}")
+async def tiempo_redirect(request: Request, resto: str = ""):
+    destino = f"/{resto}"
+    if request.url.query:
+        destino += f"?{request.url.query}"
+    return RedirectResponse(destino, status_code=301)
 
 
 @app.get("/uso", response_class=HTMLResponse)
