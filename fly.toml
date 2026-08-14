@@ -1,5 +1,6 @@
 app = "tiempoluarca"
-primary_region = "mad"
+# Fly retiró la región mad (Madrid); cdg (París) es la más cercana disponible
+primary_region = "cdg"
 
 [build]
 
