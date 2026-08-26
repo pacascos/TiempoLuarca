@@ -2189,6 +2189,22 @@ function drawDetailChart(type) {
         }
     }
 
+    // Flechas de dirección del viento en las próximas horas (misma convención
+    // que la tabla horaria: la flecha apunta hacia donde VA el viento)
+    let dirDrawn = false;
+    if (type === 'viento' && hours48.length > 1) {
+        const pxPerHour = plotW / (hours48.length - 1);
+        const step = Math.max(1, Math.ceil(26 / pxPerHour));
+        const yArrow = pad.top + 30;
+        for (let i = 0; i < hours48.length; i += step) {
+            const h = hours48[i];
+            if (h.viento_dir == null) continue;
+            const x = pad.left + (i / (hours48.length - 1)) * plotW;
+            drawWindArrow(ctx, x, yArrow, h.viento_dir, 14, windColor(h.viento_nudos) || '#8895a7');
+            dirDrawn = true;
+        }
+    }
+
     if (secondarySeries.length > 0) {
         const sRange = getRange(secondarySeries);
         for (const s of secondarySeries) {
@@ -2216,7 +2232,30 @@ function drawDetailChart(type) {
         </div>`
     ).join('')
     + (obsDrawn ? '<div class="chart-legend-item"><div class="chart-legend-dot" style="background:#fff;width:8px;height:8px;border-radius:50%"></div><span>Observado ahora (Cabo Busto)</span></div>' : '')
+    + (dirDrawn ? '<div class="chart-legend-item"><span>&#8593; Flechas: hacia donde sopla el viento (color = intensidad)</span></div>' : '')
     + (modelNote ? `<div class="chart-legend-item chart-model-note"><span>${modelNote}</span></div>` : '');
+}
+
+// Flecha de viento en canvas: dirDeg es de dónde VIENE (convención meteo);
+// se dibuja apuntando hacia donde va (dirDeg + 180)
+function drawWindArrow(ctx, x, y, dirDeg, size, color) {
+    ctx.save();
+    ctx.translate(x, y);
+    ctx.rotate(((dirDeg + 180) * Math.PI) / 180);
+    ctx.strokeStyle = color;
+    ctx.fillStyle = color;
+    ctx.lineWidth = 1.6;
+    ctx.beginPath();
+    ctx.moveTo(0, size / 2);
+    ctx.lineTo(0, -size / 2);
+    ctx.stroke();
+    ctx.beginPath();
+    ctx.moveTo(0, -size / 2);
+    ctx.lineTo(-3.2, -size / 2 + 5);
+    ctx.lineTo(3.2, -size / 2 + 5);
+    ctx.closePath();
+    ctx.fill();
+    ctx.restore();
 }
 
 // ─── Gráfica de oleaje: altura + potencia arriba, periodo con bandas abajo ───
