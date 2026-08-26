@@ -439,6 +439,16 @@ def calculate_score(inp: ScoringInput) -> ScoringResult:
             score = new_max
             reglas.append(regla)
 
+    def penalizar(puntos: int, regla: str, suelo: int = 3):
+        # Penalización gradual: resta puntos en vez de recortar a un valor fijo,
+        # para que el score no dé saltos de 3-4 puntos al cruzar un umbral.
+        # Por sí sola no baja del suelo (la presión no es peligro presente).
+        nonlocal score
+        nuevo = max(min(score, suelo), score - puntos)
+        if nuevo < score:
+            score = nuevo
+            reglas.append(regla)
+
     # Reglas de seguridad: factores críticos (viento, oleaje, rachas)
     critical = [sv, so, sr]
     count_critical_1 = sum(1 for s in critical if s <= 1)
@@ -487,10 +497,14 @@ def calculate_score(inp: ScoringInput) -> ScoringResult:
     # Visibilidad y presión
     if svis <= 2:
         cap(4, "Visibilidad ≤2 (niebla) → score limitado a 4")
-    if spres <= 2:
-        cap(4, "Presión en caída rápida → score limitado a 4 (borrasca)")
+    # La caída de presión avisa de empeoramiento futuro, no es peligro presente:
+    # penaliza gradualmente en vez de recortar a un valor fijo.
+    if spres <= 1:
+        cap(4, "Presión en desplome (>5 hPa en 6h) → score limitado a 4 (borrasca inminente)")
     elif spres <= 3:
-        cap(5, "Presión bajando → score limitado a 5")
+        penalizar(2, "Presión bajando rápido (3-5 hPa en 6h) → −2 puntos")
+    elif spres <= 5:
+        penalizar(1, "Presión bajando (2-3 hPa en 6h) → −1 punto")
 
     # Lluvia muy alta limita el score (no es seguridad pero arruina la salida)
     if sl <= 2:
