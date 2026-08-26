@@ -560,6 +560,9 @@ async def get_open_meteo_forecast() -> list | None:
         "hourly": "temperature_2m,relative_humidity_2m,precipitation_probability,precipitation,wind_speed_10m,wind_direction_10m,wind_gusts_10m,visibility,pressure_msl,cloud_cover",
         "timezone": "Europe/Madrid",
         "forecast_days": 7,
+        # Ayer incluido para poder calcular la tendencia de presión 6h
+        # también en las primeras horas de hoy (la API filtra el pasado).
+        "past_days": 1,
         "wind_speed_unit": "kn",
     }
     try:

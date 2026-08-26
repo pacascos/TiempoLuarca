@@ -141,13 +141,40 @@ def _aplica_modo(forecast: list, modo: str) -> list:
     return result
 
 
+def _presion_by_hour() -> dict:
+    """Presión por hora del forecast crudo (incluye ayer gracias a past_days=1),
+    para que la tendencia 6h exista también en las primeras horas del día."""
+    out = {}
+    for f in _cache.get("forecast") or []:
+        if f.get("presion") is not None:
+            out[f.get("timestamp", "")[:13]] = f["presion"]
+    return out
+
+
+def _trend_6h(presion_idx: dict, timestamp: str, presion: float | None) -> float | None:
+    """Cambio de presión en 6h para una hora del forecast (None si no hay dato)."""
+    if presion is None:
+        return None
+    try:
+        h_dt = datetime.fromisoformat(timestamp)
+        h_6ago = (h_dt - timedelta(hours=6)).strftime("%Y-%m-%dT%H")
+        if h_6ago in presion_idx:
+            return round(presion - presion_idx[h_6ago], 1)
+    except Exception:
+        pass
+    return None
+
+
 def _forecast_efectivo() -> list:
     """Forecast horario de Open-Meteo; si no está disponible (caída de la API),
     fallback con la predicción horaria de AEMET Valdés (48h) para que el score
     y el resumen sigan funcionando."""
     forecast = _cache.get("forecast")
     if forecast:
-        return forecast
+        # Con past_days=1 el forecast incluye ayer (solo para la tendencia de
+        # presión, ver _presion_by_hour): hacia fuera solo van horas desde hoy.
+        hoy0 = now_local().strftime("%Y-%m-%dT00:00")
+        return [f for f in forecast if f.get("timestamp", "") >= hoy0]
 
     fallback = []
     for av in _cache.get("prediccion_valdes") or []:
@@ -204,13 +231,14 @@ async def _refresh_cache(force: bool = False):
         now_str = now_local().strftime("%Y-%m-%dT%H")
 
         # Solo guardar horas pasadas o la actual (no futuras, esas son predicción)
+        presion_idx = _presion_by_hour()
         entries_to_save = []
         for f in forecast_data:
             ts = f.get("timestamp", "")
             if ts[:13] > now_str:
                 break
             m = marine_by_h.get(ts[:13], {})
-            scored = score_forecast_hour(f, m if m else None)
+            scored = score_forecast_hour(f, m if m else None, presion_trend=_trend_6h(presion_idx, ts, f.get("presion")))
             entries_to_save.append({
                 "timestamp": ts,
                 "viento_nudos": f.get("viento_nudos"),
@@ -263,11 +291,13 @@ def _compute_day_score_from_hourly(
     if not daylight:
         return None, []
 
+    presion_idx = _presion_by_hour()
     scores = []
     for f in daylight:
         ts = f.get("timestamp", "")[:13]
         f_scoring = _con_lluvia_aemet(f, aemet_by_hour.get(ts))
-        scored = score_forecast_hour(f_scoring, marine_by_hour.get(ts))
+        p_trend = _trend_6h(presion_idx, f.get("timestamp", ""), f.get("presion"))
+        scored = score_forecast_hour(f_scoring, marine_by_hour.get(ts), presion_trend=p_trend)
         scores.append(scored["score"])
 
     avg_raw = sum(scores) / len(scores)
@@ -433,13 +463,15 @@ async def api_current(modo: str = "costera"):
         current_forecast = _con_lluvia_aemet(current_forecast, aemet_now)
 
     # ─── Score principal: hora actual + próximas 4h (ventana de 5h) ──────────
+    presion_idx = _presion_by_hour()
     hour_scores = []
     for i in range(5):
         h_str = (now + timedelta(hours=i)).strftime("%Y-%m-%dT%H")
         fc_h = forecast_by_hour.get(h_str)
         if fc_h:
             fc_h = _con_lluvia_aemet(fc_h, aemet_by_hour_cur.get(h_str))
-            scored = score_forecast_hour(fc_h, marine_by_hour.get(h_str))
+            p_trend_h = _trend_6h(presion_idx, fc_h.get("timestamp", ""), fc_h.get("presion"))
+            scored = score_forecast_hour(fc_h, marine_by_hour.get(h_str), presion_trend=p_trend_h)
             hour_scores.append(scored["score"])
 
     # Para la hora actual, preferir datos de AEMET si hay.
@@ -471,6 +503,11 @@ async def api_current(modo: str = "costera"):
             visibilidad_m=vis,
             temperatura=obs.get("temperatura") if obs else (current_forecast.get("temperatura") if current_forecast else None),
             nubosidad=current_forecast.get("nubosidad") if current_forecast else None,
+            presion_trend_6h=_trend_6h(
+                presion_idx,
+                current_forecast.get("timestamp", "") if current_forecast else "",
+                current_forecast.get("presion") if current_forecast else None,
+            ),
         )
         result_now = calculate_score(inp)
 
@@ -541,7 +578,7 @@ async def api_current(modo: str = "costera"):
         presion_ahora = current_forecast.get("presion")
         h_6ago = (now - timedelta(hours=6)).strftime("%Y-%m-%dT%H")
         h_6fut = (now + timedelta(hours=6)).strftime("%Y-%m-%dT%H")
-        presion_6h_ago = forecast_by_hour.get(h_6ago, {}).get("presion")
+        presion_6h_ago = presion_idx.get(h_6ago)
         presion_6h_fut = forecast_by_hour.get(h_6fut, {}).get("presion")
         if presion_ahora is not None and presion_6h_ago is not None:
             diff = round(presion_ahora - presion_6h_ago, 1)
@@ -593,27 +630,14 @@ async def api_forecast(modo: str = "costera"):
     aemet_by_hour = _index_aemet_by_hour(_cache.get("prediccion_valdes"))
     marine_by_hour = _index_marine_by_hour(_cache.get("oleaje"))
 
-    # Indexar presion por hora para calcular tendencia 6h
-    presion_by_hour = {}
-    for f in forecast:
-        ts = f.get("timestamp", "")[:13]
-        if f.get("presion") is not None:
-            presion_by_hour[ts] = f["presion"]
+    # Presión por hora del forecast crudo (con ayer) para la tendencia 6h
+    presion_by_hour = _presion_by_hour()
 
     result = []
     for f in forecast:
         ts = f.get("timestamp", "")[:13]
         m = marine_by_hour.get(ts)
-        # Tendencia presion: valor actual - valor 6h antes
-        p_trend = None
-        if f.get("presion") is not None:
-            try:
-                h_dt = datetime.fromisoformat(f["timestamp"])
-                h_6ago = (h_dt - timedelta(hours=6)).strftime("%Y-%m-%dT%H")
-                if h_6ago in presion_by_hour:
-                    p_trend = round(f["presion"] - presion_by_hour[h_6ago], 1)
-            except Exception:
-                pass
+        p_trend = _trend_6h(presion_by_hour, f.get("timestamp", ""), f.get("presion"))
         # Lluvia: priorizar AEMET Valdés (más fiable localmente)
         aemet_h = aemet_by_hour.get(ts)
         prob_precip = f.get("prob_precipitacion")
@@ -829,11 +853,13 @@ async def api_summary_explain(modo: str = "costera"):
             return {"fecha": date_str, "label": day_label, "disponible": False}
 
         horas = []
+        presion_idx = _presion_by_hour()
         for f in daylight:
             ts = f.get("timestamp", "")[:13]
             m = marine_by_hour.get(ts)
             f_scoring = _con_lluvia_aemet(f, aemet_by_hour.get(ts))
-            scored = score_forecast_hour(f_scoring, m)
+            p_trend = _trend_6h(presion_idx, f.get("timestamp", ""), f.get("presion"))
+            scored = score_forecast_hour(f_scoring, m, presion_trend=p_trend)
             horas.append({
                 "hora": f["timestamp"][11:16],
                 "score": scored["score"],
