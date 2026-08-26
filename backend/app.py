@@ -486,7 +486,9 @@ async def index(request: Request):
         save_page_view(ip)
     except Exception as e:
         logger.error("Error guardando page view: %s", e)
-    return FileResponse("frontend/index.html")
+    # no-cache: el navegador revalida siempre el HTML y así los ?v= de
+    # app.js/styles.css surten efecto al momento tras un despliegue
+    return FileResponse("frontend/index.html", headers={"Cache-Control": "no-cache"})
 
 
 # En el servidor antiguo la app colgaba de /tiempo tras un reverse proxy;
