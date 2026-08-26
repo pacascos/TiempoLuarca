@@ -678,10 +678,11 @@ function tempColor(c) {
     return '#FF3D00';
 }
 
-// Emoticono de cielo a partir de lluvia (mm y prob), nubes y visibilidad.
+// Emoticono de cielo por hora a partir de lluvia (mm y prob), nubes y
+// visibilidad. No confundir con skyEmoji(nub, lluvia) de las vistas resumen.
 // Mismo criterio que el scoring: los mm mandan, la probabilidad sola
 // como mucho indica llovizna/chubasco posible.
-function skyEmoji(h) {
+function skyEmojiHora(h) {
     const mm = h.precipitacion;
     const prob = h.prob_precipitacion;
     const nub = h.nubosidad;
@@ -736,7 +737,7 @@ function renderForecastTable(hours) {
         return `<tr class="${isNow ? 'current-hour' : ''}">
             <td><strong>${time}</strong>${isNow ? ' <small>AHORA</small>' : ''}</td>
             <td><span class="score-badge" style="background: ${color}">${score}</span></td>
-            <td class="sky-emoji">${skyEmoji(h)}</td>
+            <td class="sky-emoji">${skyEmojiHora(h)}</td>
             <td style="color:${wc}">${formatNum(knToDisplay(h.viento_nudos))} ${windLabel()} ${windDir ? `<span class="wind-arrow" style="transform: rotate(${windDir + 180}deg)">&#8593;</span>` : ''}</td>
             <td style="color:${rc}">${formatNum(knToDisplay(h.viento_racha_nudos))} ${windLabel()}</td>
             <td style="color:${swellClr}">${swellTxt}</td>
