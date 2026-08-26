@@ -164,6 +164,8 @@ def _texto_viento(viento_now: float | None, dir_now: float | None, futuras: list
     else:
         texto = f"Viento {fuerza}" + (f" del {rumbo_now}" if rumbo_now else "")
 
+    # Tendencias: solo cuando aportan algo. Con viento flojo la dirección
+    # es ruido, y una subida de 1 a 5 kn no le importa a nadie.
     partes = []
     dirs_fut = [d for _, d in futuras[-2:] if d is not None]
     vels_fut = [v for v, _ in futuras[-2:] if v is not None]
@@ -172,19 +174,28 @@ def _texto_viento(viento_now: float | None, dir_now: float | None, futuras: list
 
     if fuerza == "calma":
         # Con calma la dirección actual no significa nada: avisar si entra viento
-        if v_fut is not None and v_fut >= 5:
+        if v_fut is not None and v_fut >= 6:
             rumbo_fut = _rumbo(dir_fut)
-            partes.append(f"entrando {rumbo_fut}" if rumbo_fut else "arreciando")
+            partes.append(f"entrando {rumbo_fut}" if rumbo_fut else "entrando viento")
     else:
-        if dir_now is not None and dir_fut is not None:
+        # Rolando: solo con viento apreciable a ambos lados (≥6 kn), giro ≥45°
+        # que cambie de rumbo, y direcciones futuras coherentes entre sí
+        if (
+            dir_now is not None and dir_fut is not None
+            and viento_now >= 6 and v_fut is not None and v_fut >= 6
+            and len(dirs_fut) >= 2
+            and abs((dirs_fut[0] - dirs_fut[1] + 180) % 360 - 180) < 45
+        ):
             delta = abs((dir_fut - dir_now + 180) % 360 - 180)
             rumbo_fut = _rumbo(dir_fut)
-            if delta >= 40 and rumbo_fut and rumbo_fut != rumbo_now:
+            if delta >= 45 and rumbo_fut and rumbo_fut != rumbo_now:
                 partes.append(f"rolando a {rumbo_fut}")
         if v_fut is not None:
-            if v_fut - viento_now >= 4:
+            # Arreciando: solo si acaba en viento que importe (≥8 kn)
+            if v_fut - viento_now >= 4 and v_fut >= 8:
                 partes.append("arreciando")
-            elif viento_now - v_fut >= 4:
+            # Amainando: solo si ahora sopla de verdad (≥8 kn)
+            elif viento_now - v_fut >= 4 and viento_now >= 8:
                 partes.append("amainando")
 
     if partes:
