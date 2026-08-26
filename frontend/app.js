@@ -678,6 +678,30 @@ function tempColor(c) {
     return '#FF3D00';
 }
 
+// Emoticono de cielo a partir de lluvia (mm y prob), nubes y visibilidad.
+// Mismo criterio que el scoring: los mm mandan, la probabilidad sola
+// como mucho indica llovizna/chubasco posible.
+function skyEmoji(h) {
+    const mm = h.precipitacion;
+    const prob = h.prob_precipitacion;
+    const nub = h.nubosidad;
+    const hora = parseInt(h.timestamp.slice(11, 13));
+    const esNoche = hora >= 21 || hora < 8;
+    if (h.visibilidad != null && h.visibilidad < 2000) return '🌫️';
+    if (mm != null && prob != null && prob >= 40) {
+        if (mm >= 2) return '⛈️';
+        if (mm >= 0.5) return '🌧️';
+        if (mm >= 0.1) return '🌦️';
+    }
+    if (prob != null && prob >= 70) return '🌦️';
+    if (nub == null) return '';
+    if (nub >= 85) return '☁️';
+    if (esNoche) return nub >= 45 ? '☁️' : '🌙';
+    if (nub >= 45) return '⛅';
+    if (nub >= 15) return '🌤️';
+    return '☀️';
+}
+
 function renderForecastTable(hours) {
     const tbody = document.getElementById('forecastBody');
     const nowHour = localHourStr();
@@ -712,6 +736,7 @@ function renderForecastTable(hours) {
         return `<tr class="${isNow ? 'current-hour' : ''}">
             <td><strong>${time}</strong>${isNow ? ' <small>AHORA</small>' : ''}</td>
             <td><span class="score-badge" style="background: ${color}">${score}</span></td>
+            <td class="sky-emoji">${skyEmoji(h)}</td>
             <td style="color:${wc}">${formatNum(knToDisplay(h.viento_nudos))} ${windLabel()} ${windDir ? `<span class="wind-arrow" style="transform: rotate(${windDir + 180}deg)">&#8593;</span>` : ''}</td>
             <td style="color:${rc}">${formatNum(knToDisplay(h.viento_racha_nudos))} ${windLabel()}</td>
             <td style="color:${swellClr}">${swellTxt}</td>

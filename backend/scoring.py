@@ -328,17 +328,20 @@ def _score_lluvia(prob: float | None, mm: float | None = None) -> int:
         base_prob = 2
 
     # Si tenemos intensidad en mm/h, ajustar
-    if mm is not None and mm > 0 and prob > 30:
+    if mm is not None and prob > 30:
+        if mm < 0.1:
+            # Probabilidad alta pero sin agua prevista: como mucho llovizna
+            # dudosa. La probabilidad mide certeza, no cantidad — sin mm la
+            # nota no baja de 6 (antes un 100% con 0.0mm puntuaba 2).
+            return max(base_prob, 6)
         if mm >= 5:
             score_mm = 1   # lluvia fuerte
         elif mm >= 2:
             score_mm = 3   # lluvia moderada
         elif mm >= 0.5:
             score_mm = 5   # lluvia ligera
-        elif mm >= 0.1:
-            score_mm = 7   # llovizna
         else:
-            score_mm = 8   # casi nada
+            score_mm = 7   # llovizna
         # Combinar: el peor de los dos pesa mas
         return max(1, round(min(base_prob, score_mm) * 0.6 + max(base_prob, score_mm) * 0.4))
 
@@ -506,9 +509,12 @@ def calculate_score(inp: ScoringInput) -> ScoringResult:
     elif spres <= 5:
         penalizar(1, "Presión bajando (2-3 hPa en 6h) → −1 punto")
 
-    # Lluvia muy alta limita el score (no es seguridad pero arruina la salida)
-    if sl <= 2:
-        cap(5, "Lluvia intensa → score limitado a 5")
+    # Lluvia: no es peligro en sí misma pero arruina la salida →
+    # penalización gradual (como la presión), no un techo fijo
+    if sl <= 1:
+        penalizar(3, "Lluvia muy fuerte → −3 puntos")
+    elif sl <= 2:
+        penalizar(2, "Lluvia intensa → −2 puntos")
 
     # Regla combinada: si varios factores de seguridad son malos a la vez
     # (no cuenta temperatura ni nubosidad que son confort)
