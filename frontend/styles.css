@@ -225,6 +225,17 @@ h2 {
     max-width: 400px;
 }
 
+.wind-text {
+    color: var(--text);
+    font-size: 0.85rem;
+    margin-top: 0.35rem;
+    text-align: center;
+    max-width: 400px;
+    opacity: 0.9;
+}
+.wind-text:empty { display: none; }
+.wind-text::before { content: '💨 '; }
+
 /* ─── Alerts ──────────────────────────────────────────────────────────────── */
 .alerts-container { margin-bottom: 0.5rem; }
 .alert-banner {

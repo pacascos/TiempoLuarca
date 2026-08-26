@@ -152,6 +152,9 @@ function renderCurrent(data) {
 
         document.getElementById('scoreRecommendation').textContent = score.recomendacion;
 
+        const windTextEl = document.getElementById('windText');
+        if (windTextEl) windTextEl.textContent = data.viento_texto || '';
+
         // Animate ring: 10=full, 1=empty
         const ring = document.getElementById('ringFg');
         const circumference = 2 * Math.PI * 54;

@@ -121,6 +121,76 @@ _DIR_DEGREES = {
     "O": 270, "ONO": 292.5, "NO": 315, "NNO": 337.5,
 }
 
+_RUMBOS = ["norte", "nordeste", "este", "sudeste", "sur", "sudoeste", "oeste", "noroeste"]
+
+
+def _rumbo(deg: float | None) -> str | None:
+    if deg is None:
+        return None
+    return _RUMBOS[round(deg / 45) % 8]
+
+
+def _fuerza_viento(kn: float) -> str:
+    if kn < 2:
+        return "calma"
+    if kn <= 7:
+        return "suave"
+    if kn <= 12:
+        return "moderado"
+    if kn <= 18:
+        return "fresco"
+    if kn <= 25:
+        return "fuerte"
+    return "muy fuerte"
+
+
+def _media_circular(grados: list[float]) -> float:
+    from math import atan2, cos, degrees, radians, sin
+    x = sum(cos(radians(g)) for g in grados)
+    y = sum(sin(radians(g)) for g in grados)
+    return degrees(atan2(y, x)) % 360
+
+
+def _texto_viento(viento_now: float | None, dir_now: float | None, futuras: list) -> str | None:
+    """Descripción en lenguaje natural del viento actual y su tendencia.
+    `futuras` = [(nudos, dir_grados)] de las próximas ~4 horas.
+    Ej.: 'Viento suave del nordeste, rolando a norte y arreciando'."""
+    if viento_now is None:
+        return None
+    fuerza = _fuerza_viento(viento_now)
+    rumbo_now = _rumbo(dir_now)
+    if fuerza == "calma":
+        texto = "Viento en calma"
+    else:
+        texto = f"Viento {fuerza}" + (f" del {rumbo_now}" if rumbo_now else "")
+
+    partes = []
+    dirs_fut = [d for _, d in futuras[-2:] if d is not None]
+    vels_fut = [v for v, _ in futuras[-2:] if v is not None]
+    dir_fut = _media_circular(dirs_fut) if dirs_fut else None
+    v_fut = sum(vels_fut) / len(vels_fut) if vels_fut else None
+
+    if fuerza == "calma":
+        # Con calma la dirección actual no significa nada: avisar si entra viento
+        if v_fut is not None and v_fut >= 5:
+            rumbo_fut = _rumbo(dir_fut)
+            partes.append(f"entrando {rumbo_fut}" if rumbo_fut else "arreciando")
+    else:
+        if dir_now is not None and dir_fut is not None:
+            delta = abs((dir_fut - dir_now + 180) % 360 - 180)
+            rumbo_fut = _rumbo(dir_fut)
+            if delta >= 40 and rumbo_fut and rumbo_fut != rumbo_now:
+                partes.append(f"rolando a {rumbo_fut}")
+        if v_fut is not None:
+            if v_fut - viento_now >= 4:
+                partes.append("arreciando")
+            elif viento_now - v_fut >= 4:
+                partes.append("amainando")
+
+    if partes:
+        texto += ", " + " y ".join(partes)
+    return texto
+
 
 def _aplica_modo(forecast: list, modo: str) -> list:
     """Modo de navegación: 'costera' usa el viento del punto de costa (defecto);
@@ -477,18 +547,29 @@ async def api_current(modo: str = "costera"):
     # Para la hora actual, preferir datos de AEMET si hay.
     # En modo altura la observación costera engaña: usar el forecast de mar abierto.
     score_data = None
+    viento_texto = None
     if (obs or current_forecast) and hour_scores:
         if obs and (modo != "altura" or not current_forecast):
             viento = obs.get("viento_vel_nudos")
             racha = obs.get("viento_racha_nudos")
+            dir_now = obs.get("viento_dir")
             # AEMET da visibilidad en km; 0 es válido (niebla cerrada)
             vis = obs["visibilidad"] * 1000 if obs.get("visibilidad") is not None else None
         else:
             viento = current_forecast.get("viento_nudos") if current_forecast else None
             racha = current_forecast.get("viento_racha_nudos") if current_forecast else None
+            dir_now = current_forecast.get("viento_dir") if current_forecast else None
             vis = current_forecast.get("visibilidad") if current_forecast else None
             if obs and obs.get("visibilidad") is not None:
                 vis = obs["visibilidad"] * 1000
+
+        # Texto del viento con tendencia de las próximas 4h del forecast
+        futuras = []
+        for i in range(1, 5):
+            fc_h = forecast_by_hour.get((now + timedelta(hours=i)).strftime("%Y-%m-%dT%H"))
+            if fc_h:
+                futuras.append((fc_h.get("viento_nudos"), fc_h.get("viento_dir")))
+        viento_texto = _texto_viento(viento, dir_now, futuras)
 
         inp = ScoringInput(
             viento_nudos=viento,
@@ -610,6 +691,7 @@ async def api_current(modo: str = "costera"):
             "fuente_lluvia": "AEMET" if (aemet_now and aemet_now.get("prob_precipitacion") is not None) else "Open-Meteo",
         } if current_forecast else None,
         "presion_trend": presion_trend,
+        "viento_texto": viento_texto,
         "alertas": _cache.get("alertas_costeras") or [],
         "score": score_data,
         "playa": (_cache.get("prediccion_playa") or [None])[0] if _cache.get("prediccion_playa") else None,
