@@ -23,7 +23,17 @@ from backend.data_sources import (
     get_ihm_mareas, get_open_meteo_marine, get_open_meteo_forecast,
     get_open_meteo_extended,
 )
-from backend.scoring import LABELS, WEIGHTS, ScoringInput, calculate_score, score_forecast_hour
+from backend.scoring import (
+    LABELS,
+    WEIGHTS,
+    ScoringInput,
+    _score_chop,
+    _score_racha,
+    _score_swell,
+    _score_viento,
+    calculate_score,
+    score_forecast_hour,
+)
 from backend.database import init_db, save_hourly_batch, save_feedback, get_feedback_list, save_page_view, get_usage_stats
 
 logging.basicConfig(level=logging.INFO)
@@ -796,6 +806,74 @@ async def api_solunar():
     return _solunar_cache[key]
 
 
+def _resumen_dia(score_medio, viento_max, racha_max, swell_max, chop_max,
+                 precip_mm_max, precip_prob_max, vis_min, presion_trend_min=None) -> str:
+    """Resumen del día en pocas palabras: nombra los 1-2 factores que limitan
+    la nota ('mar picada y mucho viento'), o describe lo bueno si es nota alta.
+    Usa las escalas de scoring.py para que los umbrales cuadren con la nota."""
+    def positivo():
+        if (viento_max or 0) <= 7 and (swell_max or 0) <= 0.6 and (chop_max or 0) <= 0.3:
+            return "Mar llana y poco viento"
+        if (viento_max or 0) <= 11 and (swell_max or 0) <= 1.0:
+            return "Mar tranquila, brisa suave"
+        return "Buenas condiciones"
+
+    if score_medio is not None and score_medio >= 8:
+        return positivo()
+
+    culpables = []  # (gravedad 1-10, frase)
+
+    s_ch = _score_chop(chop_max, None) if chop_max is not None else 10
+    if s_ch <= 6 and chop_max >= (swell_max or 0) * 0.6:
+        culpables.append((s_ch, "mar picada dura" if chop_max >= 1.0 else "mar picada"))
+
+    s_sw = _score_swell(swell_max, None) if swell_max is not None else 10
+    if s_sw <= 6:
+        if swell_max >= 2.0:
+            frase = f"olas muy grandes ({swell_max:.1f} m)"
+        elif swell_max >= 1.4:
+            frase = f"olas grandes ({swell_max:.1f} m)"
+        else:
+            frase = f"mar de fondo de {swell_max:.1f} m"
+        culpables.append((s_sw, frase))
+
+    s_v = _score_viento(viento_max) if viento_max is not None else 10
+    if s_v <= 6:
+        if viento_max > 25:
+            culpables.append((s_v, "viento muy fuerte"))
+        elif viento_max > 18:
+            culpables.append((s_v, "viento fuerte"))
+        else:
+            culpables.append((s_v, "mucho viento"))
+
+    s_r = _score_racha(racha_max) if racha_max is not None else 10
+    if s_r <= 6 and s_v > 6:  # solo si el viento medio no lo cuenta ya
+        culpables.append((s_r, "rachas fuertes"))
+
+    if precip_mm_max is not None and precip_mm_max >= 2:
+        culpables.append((3, "lluvia fuerte"))
+    elif precip_mm_max is not None and precip_mm_max >= 0.2 and (precip_prob_max or 0) >= 50:
+        culpables.append((5, "lluvia"))
+    elif (precip_prob_max or 0) >= 80:
+        culpables.append((6, "lluvia probable"))
+    elif (precip_prob_max or 0) >= 55:
+        culpables.append((7, "chubascos posibles"))
+
+    if vis_min is not None and vis_min <= 2000:
+        culpables.append((2, "niebla"))
+
+    if presion_trend_min is not None:
+        if presion_trend_min <= -5:
+            culpables.append((2, "borrasca acercándose"))
+        elif presion_trend_min <= -2.5:
+            culpables.append((5, "presión cayendo"))
+
+    if not culpables:
+        return positivo() if score_medio is None or score_medio >= 7 else "Condiciones regulares"
+    culpables.sort(key=lambda c: c[0])
+    return " y ".join(f for _, f in culpables[:2]).capitalize()
+
+
 @app.get("/api/summary")
 async def api_summary(modo: str = "costera"):
     """Resumen para hoy, mañana y próximo fin de semana."""
@@ -871,7 +949,13 @@ async def api_summary(modo: str = "costera"):
         chops = [marine_by_hour.get(f.get("timestamp", "")[:13], {}).get("viento_ola_altura") for f in daylight]
         chops = [c for c in chops if c is not None]
         precip = [f.get("prob_precipitacion") for f in daylight if f.get("prob_precipitacion") is not None]
+        precip_mm = [f.get("precipitacion") for f in daylight if f.get("precipitacion") is not None]
+        visibs = [f.get("visibilidad") for f in daylight if f.get("visibilidad") is not None]
         temps = [f.get("temperatura") for f in daylight if f.get("temperatura") is not None]
+        presion_idx = _presion_by_hour()
+        trends = [t for t in (
+            _trend_6h(presion_idx, f.get("timestamp", ""), f.get("presion")) for f in daylight
+        ) if t is not None]
 
         best_score = max(scores) if scores else None
         worst_score = min(scores) if scores else None
@@ -895,6 +979,17 @@ async def api_summary(modo: str = "costera"):
         return {
             "fecha": date_str,
             "disponible": True,
+            "resumen_corto": _resumen_dia(
+                avg_score,
+                max(vientos) if vientos else None,
+                max(rachas) if rachas else None,
+                max(swells) if swells else None,
+                max(chops) if chops else None,
+                max(precip_mm) if precip_mm else None,
+                max(precip) if precip else None,
+                min(visibs) if visibs else None,
+                min(trends) if trends else None,
+            ),
             "score_medio": avg_score,
             "score_mejor": best_score,
             "score_peor": worst_score,

@@ -594,6 +594,13 @@ h2 {
     text-transform: uppercase;
     letter-spacing: 0.03em;
 }
+.summary-resumen {
+    margin-top: 0.25rem;
+    font-size: 0.72rem;
+    font-style: italic;
+    color: var(--text);
+    opacity: 0.85;
+}
 .summary-details {
     margin-top: 0.5rem;
     font-size: 0.7rem;

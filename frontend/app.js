@@ -467,6 +467,7 @@ function renderSummary(data) {
             ${em}
             <div class="summary-score" style="color: ${color}">${d.score_medio}</div>
             <div class="summary-label" style="color: ${color}">${d.label_score || ''}</div>
+            ${d.resumen_corto ? `<div class="summary-resumen">${d.resumen_corto}</div>` : ''}
             <div class="summary-details">
                 <span style="color:${windColor(d.viento_max)}">Viento: ${d.viento_medio != null ? knToDisplay(d.viento_medio) : '--'} ${windLabel()} (max ${d.viento_max != null ? knToDisplay(d.viento_max) : '--'})</span><br>
                 <span style="color:${swellColor(d.ola_max)}">Olas: ${d.ola_media || '--'}m (max ${d.ola_max || '--'}m)</span><br>
