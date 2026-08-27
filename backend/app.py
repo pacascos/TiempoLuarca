@@ -604,6 +604,13 @@ async def api_current(modo: str = "costera"):
             viento_ola_altura=current_marine.get("viento_ola_altura") if current_marine else None,
             viento_ola_periodo=current_marine.get("viento_ola_periodo") if current_marine else None,
             prob_precipitacion=current_forecast.get("prob_precipitacion") if current_forecast else None,
+            # Misma intensidad (mm/h) que usan las horas del forecast: sin ella,
+            # un 100% de probabilidad con 0 mm puntuaba 2 en "ahora" y 6 en la
+            # hora equivalente del horario, y el score principal caía dos puntos.
+            precipitacion_mm=(
+                current_forecast.get("precipitacion") if current_forecast and current_forecast.get("precipitacion") is not None
+                else (obs.get("precipitacion") if obs else None)
+            ),
             visibilidad_m=vis,
             temperatura=obs.get("temperatura") if obs else (current_forecast.get("temperatura") if current_forecast else None),
             nubosidad=current_forecast.get("nubosidad") if current_forecast else None,
